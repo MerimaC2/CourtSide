@@ -1,0 +1,38 @@
+using CourtSide.Services.Auth;
+using CourtSide.Services.Services;
+using CourtSide.Services.Validation;
+using CourtSide.Shared.Services;
+using FluentValidation;
+using Mapster;
+using MapsterMapper;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CourtSide.Services;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddCourtSideServices(this IServiceCollection services)
+    {
+        // Mapster: use global config; IMapper resolves via DI (ServiceMapper).
+        var config = TypeAdapterConfig.GlobalSettings;
+        services.AddSingleton(config);
+        services.AddScoped<IMapper, ServiceMapper>();
+
+        // FluentValidation
+        services.AddValidatorsFromAssemblyContaining<CourtUpsertDtoValidator>();
+
+        // Cross-cutting
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IAuthService, AuthService>();
+
+        // Domain services
+        services.AddScoped<ICountryService, CountryService>();
+        services.AddScoped<ICityService, CityService>();
+        services.AddScoped<ISportService, SportService>();
+        services.AddScoped<ISportCenterService, SportCenterService>();
+        services.AddScoped<ICourtService, CourtService>();
+
+        return services;
+    }
+}
