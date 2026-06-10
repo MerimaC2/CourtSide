@@ -41,35 +41,39 @@ services:
     networks: [courtside-net]
     restart: unless-stopped
 
-  # ----- Dodaje se u Fazi 1 (Dockerfile: CourtSide.Api/Dockerfile) -----
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: CourtSide.Api/Dockerfile
-  #   container_name: courtside-api
-  #   env_file: .env
-  #   ports:
-  #     - "5000:80"
-  #   volumes:
-  #     - uploads_data:/app/wwwroot/uploads
-  #   depends_on:
-  #     sqlserver: { condition: service_healthy }
-  #     rabbitmq:  { condition: service_healthy }
-  #   networks: [courtside-net]
-  #   restart: unless-stopped
+  api:
+    build:
+      context: .
+      dockerfile: CourtSide.Api/Dockerfile
+    container_name: courtside-api
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:80"
+      CONNECTION_STRING: "Server=sqlserver,1433;Database=${DB_NAME};User Id=sa;Password=${DB_SA_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+      RABBITMQ_HOST: "rabbitmq"
+    ports:
+      - "5000:80"
+    volumes:
+      - uploads_data:/app/wwwroot/uploads
+    depends_on:
+      sqlserver: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    networks: [courtside-net]
+    restart: unless-stopped
 
-  # ----- Dodaje se u Fazi 2 (Dockerfile: CourtSide.Worker/Dockerfile) -----
-  # worker:
-  #   build:
-  #     context: .
-  #     dockerfile: CourtSide.Worker/Dockerfile
-  #   container_name: courtside-worker
-  #   env_file: .env
-  #   depends_on:
-  #     sqlserver: { condition: service_healthy }
-  #     rabbitmq:  { condition: service_healthy }
-  #   networks: [courtside-net]
-  #   restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: CourtSide.Worker/Dockerfile
+    container_name: courtside-worker
+    env_file: .env
+    environment:
+      RABBITMQ_HOST: "rabbitmq"
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    networks: [courtside-net]
+    restart: unless-stopped
 
 volumes:
   sqlserver_data:

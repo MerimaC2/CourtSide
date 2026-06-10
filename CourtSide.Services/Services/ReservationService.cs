@@ -6,6 +6,8 @@ using CourtSide.Core.Exceptions;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Core.StateMachines;
 using CourtSide.Infrastructure;
+using CourtSide.Shared.Messages;
+using CourtSide.Shared.Messaging;
 using CourtSide.Shared.Services;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
@@ -27,12 +29,15 @@ public class ReservationService : IReservationService
     private readonly DatabaseContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly INotificationService _notifications;
+    private readonly IMessagePublisher _publisher;
 
-    public ReservationService(DatabaseContext db, ICurrentUser currentUser, INotificationService notifications)
+    public ReservationService(DatabaseContext db, ICurrentUser currentUser,
+        INotificationService notifications, IMessagePublisher publisher)
     {
         _db = db;
         _currentUser = currentUser;
         _notifications = notifications;
+        _publisher = publisher;
     }
 
     public async Task<PagedResult<ReservationDto>> GetPagedAsync(ReservationSearchObject search)
@@ -127,6 +132,8 @@ public class ReservationService : IReservationService
         await _notifications.CreateAsync(userId, NotificationType.ReservationCreated,
             "Rezervacija kreirana",
             $"Vaša rezervacija {reservation.ReservationNumber} je kreirana i čeka potvrdu.");
+        await SendEmailAsync(userId, "Potvrda kreiranja rezervacije",
+            $"Vaša rezervacija {reservation.ReservationNumber} je kreirana i čeka potvrdu.");
 
         return await GetByIdAsync(reservation.Id);
     }
@@ -146,6 +153,8 @@ public class ReservationService : IReservationService
 
         await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationConfirmed,
             "Rezervacija potvrđena",
+            $"Vaša rezervacija {reservation.ReservationNumber} je potvrđena.");
+        await SendEmailAsync(reservation.ClientId, "Rezervacija potvrđena",
             $"Vaša rezervacija {reservation.ReservationNumber} je potvrđena.");
 
         return await GetByIdAsync(reservation.Id);
@@ -181,6 +190,8 @@ public class ReservationService : IReservationService
         await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
             "Rezervacija otkazana",
             $"Rezervacija {reservation.ReservationNumber} je otkazana. Razlog: {dto.Reason}");
+        await SendEmailAsync(reservation.ClientId, "Rezervacija otkazana",
+            $"Rezervacija {reservation.ReservationNumber} je otkazana. Razlog: {dto.Reason}");
 
         return await GetByIdAsync(reservation.Id);
     }
@@ -212,6 +223,13 @@ public class ReservationService : IReservationService
             .ToListAsync();
 
         return new PagedResult<ReservationDto> { Items = items, TotalCount = total, Page = page, PageSize = size };
+    }
+
+    private async Task SendEmailAsync(int userId, string subject, string body)
+    {
+        var email = await _db.Users.Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync();
+        if (!string.IsNullOrWhiteSpace(email))
+            await _publisher.PublishAsync(new EmailMessage { To = email!, Subject = subject, Body = body });
     }
 
     private int RequireUser() =>

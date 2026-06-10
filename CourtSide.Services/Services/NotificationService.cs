@@ -5,9 +5,10 @@ using CourtSide.Core.Enumerations;
 using CourtSide.Core.Exceptions;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Infrastructure;
+using CourtSide.Shared.Hubs;
 using CourtSide.Shared.Services;
 using Mapster;
-using MapsterMapper;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CourtSide.Services.Services;
@@ -25,11 +26,13 @@ public class NotificationService : INotificationService
 {
     private readonly DatabaseContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly IHubContext<NotificationHub> _hub;
 
-    public NotificationService(DatabaseContext db, ICurrentUser currentUser)
+    public NotificationService(DatabaseContext db, ICurrentUser currentUser, IHubContext<NotificationHub> hub)
     {
         _db = db;
         _currentUser = currentUser;
+        _hub = hub;
     }
 
     public async Task CreateAsync(int userId, NotificationType type, string title, string text)
@@ -45,7 +48,18 @@ public class NotificationService : INotificationService
         };
         _db.Notifications.Add(notification);
         await _db.SaveChangesAsync();
-        // Faza 2C: real-time push via SignalR is wired on top of this.
+
+        // Real-time push to the specific user (auto-refresh, no manual refresh needed).
+        var dto = new NotificationDto
+        {
+            Id = notification.Id,
+            Title = notification.Title,
+            Text = notification.Text,
+            IsRead = notification.IsRead,
+            Type = notification.Type,
+            CreatedAt = notification.CreatedAt
+        };
+        await _hub.Clients.User(userId.ToString()).SendAsync("ReceiveNotification", dto);
     }
 
     public async Task<PagedResult<NotificationDto>> GetMyAsync(BaseSearchObject search)

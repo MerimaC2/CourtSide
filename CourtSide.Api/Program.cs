@@ -3,8 +3,11 @@ using System.Text.Json.Serialization;
 using CourtSide.Api.Middleware;
 using CourtSide.Core.Entities.Identity;
 using CourtSide.Infrastructure;
+using CourtSide.Infrastructure.Messaging;
 using CourtSide.Infrastructure.Seed;
 using CourtSide.Services;
+using CourtSide.Shared.Hubs;
+using CourtSide.Shared.Messaging;
 using CourtSide.Shared.Models;
 using DotNetEnv;
 using FluentValidation.AspNetCore;
@@ -40,6 +43,17 @@ builder.Services.AddSingleton(Options.Create(jwt));
 
 var corsOrigins = OptionalEnv("CORS_ALLOWED_ORIGINS", "")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+var rabbit = new RabbitMqSettings
+{
+    Host = OptionalEnv("RABBITMQ_HOST", "localhost"),
+    Port = int.TryParse(OptionalEnv("RABBITMQ_PORT", "5672"), out var rp) ? rp : 5672,
+    Username = OptionalEnv("RABBITMQ_USER", "guest"),
+    Password = OptionalEnv("RABBITMQ_PASSWORD", "guest"),
+    Queue = OptionalEnv("RABBITMQ_QUEUE", "courtside.notifications")
+};
+builder.Services.AddSingleton(Options.Create(rabbit));
+builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
 // ----- Persistence -----
 builder.Services.AddDbContext<DatabaseContext>(options => options.UseSqlServer(connectionString));
@@ -77,6 +91,19 @@ builder.Services.AddAuthentication(options =>
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key))
         };
+
+        // Allow SignalR (WebSocket) clients to pass the JWT via the access_token query string.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                    context.Token = accessToken;
+                return Task.CompletedTask;
+            }
+        };
     });
 builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
@@ -85,6 +112,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers()
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddSignalR();
 
 // ----- Application services (Mapster, validators, domain services) -----
 builder.Services.AddCourtSideServices();
@@ -145,5 +173,6 @@ app.UseCors("DefaultCors");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 app.Run();
