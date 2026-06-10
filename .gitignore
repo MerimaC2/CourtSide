@@ -1,0 +1,81 @@
+# ===== Secrets / config =====
+.env
+*.env
+!.env.example
+.env-tajne.zip
+
+# ===== .NET =====
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+*.cache
+project.lock.json
+artifacts/
+TestResults/
+*.trx
+# ML.NET trained models (regenerated at runtime)
+*.zip.model
+Models/*.zip
+
+# ===== Rider / VS Code =====
+.idea/
+.vscode/
+*.swp
+
+# ===== Flutter / Dart =====
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/doc/api/
+**/flutter_*.png
+**/linked_*.ds
+**/unlinked.ds
+**/unlinked_spec.ds
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Flutter Android
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/*.keystore
+**/*.jks
+
+# Flutter iOS / macOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/macos/Pods/
+
+# Flutter Windows desktop build
+**/windows/flutter/ephemeral/
+
+# ===== OS =====
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# ===== Build artifacts (delivered via GitHub Releases, not committed) =====
+*.apk
+*.aab
+*.exe
+!**/runner/**/*.exe

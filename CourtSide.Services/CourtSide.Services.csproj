@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CourtSide.Core\CourtSide.Core.csproj" />
+    <ProjectReference Include="..\CourtSide.Infrastructure\CourtSide.Infrastructure.csproj" />
+    <ProjectReference Include="..\CourtSide.Shared\CourtSide.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

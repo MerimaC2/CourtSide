@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-CourtSide.Worker-a5ea5d75-7ca0-4077-9358-dd109faf2745</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.17" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CourtSide.Core\CourtSide.Core.csproj" />
+    <ProjectReference Include="..\CourtSide.Infrastructure\CourtSide.Infrastructure.csproj" />
+    <ProjectReference Include="..\CourtSide.Shared\CourtSide.Shared.csproj" />
+  </ItemGroup>
+</Project>
