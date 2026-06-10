@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
     {
         // Mapster: use global config; IMapper resolves via DI (ServiceMapper).
         var config = TypeAdapterConfig.GlobalSettings;
+        config.Scan(typeof(ServiceCollectionExtensions).Assembly); // apply IRegister mappings
         services.AddSingleton(config);
         services.AddScoped<IMapper, ServiceMapper>();
 
@@ -32,6 +33,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISportService, SportService>();
         services.AddScoped<ISportCenterService, SportCenterService>();
         services.AddScoped<ICourtService, CourtService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IAvailabilityService, AvailabilityService>();
+        services.AddScoped<IReservationService, ReservationService>();
 
         return services;
     }

@@ -1,0 +1,222 @@
+using CourtSide.Core.Dto;
+using CourtSide.Core.Dto.Base;
+using CourtSide.Core.Entities;
+using CourtSide.Core.Enumerations;
+using CourtSide.Core.Exceptions;
+using CourtSide.Core.SearchObjects;
+using CourtSide.Core.StateMachines;
+using CourtSide.Infrastructure;
+using CourtSide.Shared.Services;
+using Mapster;
+using Microsoft.EntityFrameworkCore;
+
+namespace CourtSide.Services.Services;
+
+public interface IReservationService
+{
+    Task<PagedResult<ReservationDto>> GetPagedAsync(ReservationSearchObject search);
+    Task<PagedResult<ReservationDto>> GetMyAsync(ReservationSearchObject search);
+    Task<ReservationDto> GetByIdAsync(int id);
+    Task<ReservationDto> CreateAsync(ReservationCreateDto dto);
+    Task<ReservationDto> ConfirmAsync(int id);
+    Task<ReservationDto> CancelAsync(int id, ReservationCancelDto dto);
+}
+
+public class ReservationService : IReservationService
+{
+    private readonly DatabaseContext _db;
+    private readonly ICurrentUser _currentUser;
+    private readonly INotificationService _notifications;
+
+    public ReservationService(DatabaseContext db, ICurrentUser currentUser, INotificationService notifications)
+    {
+        _db = db;
+        _currentUser = currentUser;
+        _notifications = notifications;
+    }
+
+    public async Task<PagedResult<ReservationDto>> GetPagedAsync(ReservationSearchObject search)
+        => await QueryAsync(search, _db.Reservations.AsQueryable());
+
+    public async Task<PagedResult<ReservationDto>> GetMyAsync(ReservationSearchObject search)
+    {
+        var userId = RequireUser();
+        return await QueryAsync(search, _db.Reservations.Where(r => r.ClientId == userId));
+    }
+
+    public async Task<ReservationDto> GetByIdAsync(int id)
+    {
+        var dto = await _db.Reservations.Where(r => r.Id == id)
+            .ProjectToType<ReservationDto>()
+            .FirstOrDefaultAsync()
+            ?? throw new NotFoundException("Rezervacija", id);
+
+        if (!_currentUser.IsAdmin && dto.ClientId != _currentUser.UserId)
+            throw new BusinessException("Nemate pristup ovoj rezervaciji.");
+
+        return dto;
+    }
+
+    public async Task<ReservationDto> CreateAsync(ReservationCreateDto dto)
+    {
+        var userId = RequireUser();
+
+        var court = await _db.Courts.Include(c => c.WorkingHours)
+            .FirstOrDefaultAsync(c => c.Id == dto.CourtId)
+            ?? throw new NotFoundException("Teren", dto.CourtId);
+
+        if (!court.IsActive)
+            throw new BusinessException("Teren trenutno nije dostupan za rezervaciju.");
+
+        if (dto.EndTime <= dto.StartTime)
+            throw new BusinessException("Vrijeme završetka mora biti nakon vremena početka.");
+
+        var startMoment = dto.Date.ToDateTime(dto.StartTime);
+        if (startMoment <= DateTime.Now)
+            throw new BusinessException("Termin rezervacije mora biti u budućnosti.");
+
+        var workingHours = court.WorkingHours.FirstOrDefault(w => w.DayOfWeek == dto.Date.DayOfWeek);
+        if (workingHours is null || dto.StartTime < workingHours.OpenTime || dto.EndTime > workingHours.CloseTime)
+            throw new BusinessException("Odabrani termin je izvan radnog vremena terena.");
+
+        // Overlap check on the server (not only on the client).
+        var overlapsReservation = await _db.Reservations.AnyAsync(r =>
+            r.CourtId == dto.CourtId && r.Date == dto.Date &&
+            r.Status != ReservationStatus.Cancelled &&
+            r.StartTime < dto.EndTime && dto.StartTime < r.EndTime);
+        if (overlapsReservation)
+            throw new BusinessException("Odabrani termin je već rezervisan.");
+
+        var overlapsBlock = await _db.CourtAvailabilityBlocks.AnyAsync(b =>
+            b.CourtId == dto.CourtId && b.Date == dto.Date &&
+            b.StartTime < dto.EndTime && dto.StartTime < b.EndTime);
+        if (overlapsBlock)
+            throw new BusinessException("Odabrani termin je blokiran i nije dostupan.");
+
+        var hours = (decimal)(dto.EndTime.ToTimeSpan() - dto.StartTime.ToTimeSpan()).TotalHours;
+        var totalPrice = Math.Round(court.PricePerHour * hours, 2);
+        var now = DateTime.UtcNow;
+
+        var reservation = new Reservation
+        {
+            ReservationNumber = GenerateNumber(),
+            ClientId = userId,
+            CourtId = dto.CourtId,
+            Date = dto.Date,
+            StartTime = dto.StartTime,
+            EndTime = dto.EndTime,
+            TotalPrice = totalPrice,
+            Status = ReservationStatus.Pending,
+            ContactName = dto.ContactName,
+            ContactPhone = dto.ContactPhone,
+            Note = dto.Note,
+            CreatedAt = now,
+            Payment = new Payment
+            {
+                Method = dto.PaymentMethod,
+                Amount = totalPrice,
+                Currency = "BAM",
+                Status = PaymentStatus.Pending,
+                CreatedAt = now
+            }
+        };
+
+        _db.Reservations.Add(reservation);
+        await _db.SaveChangesAsync();
+
+        await _notifications.CreateAsync(userId, NotificationType.ReservationCreated,
+            "Rezervacija kreirana",
+            $"Vaša rezervacija {reservation.ReservationNumber} je kreirana i čeka potvrdu.");
+
+        return await GetByIdAsync(reservation.Id);
+    }
+
+    public async Task<ReservationDto> ConfirmAsync(int id)
+    {
+        var reservation = await _db.Reservations.FirstOrDefaultAsync(r => r.Id == id)
+            ?? throw new NotFoundException("Rezervacija", id);
+
+        ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Confirmed);
+
+        reservation.Status = ReservationStatus.Confirmed;
+        reservation.ConfirmedAt = DateTime.UtcNow;
+        reservation.ConfirmedById = _currentUser.UserId;
+        reservation.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationConfirmed,
+            "Rezervacija potvrđena",
+            $"Vaša rezervacija {reservation.ReservationNumber} je potvrđena.");
+
+        return await GetByIdAsync(reservation.Id);
+    }
+
+    public async Task<ReservationDto> CancelAsync(int id, ReservationCancelDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+            throw new BusinessException("Razlog otkazivanja je obavezan.");
+
+        var reservation = await _db.Reservations.FirstOrDefaultAsync(r => r.Id == id)
+            ?? throw new NotFoundException("Rezervacija", id);
+
+        var isOwner = reservation.ClientId == _currentUser.UserId;
+        if (!_currentUser.IsAdmin && !isOwner)
+            throw new BusinessException("Nemate pravo otkazati ovu rezervaciju.");
+
+        ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
+
+        // Clients can cancel up to 24h before the start; admins may cancel anytime.
+        var startMoment = reservation.Date.ToDateTime(reservation.StartTime);
+        if (!_currentUser.IsAdmin && startMoment - DateTime.Now < TimeSpan.FromHours(24))
+            throw new BusinessException("Rezervaciju je moguće otkazati najkasnije 24 sata prije termina.");
+
+        reservation.Status = ReservationStatus.Cancelled;
+        reservation.CancelledAt = DateTime.UtcNow;
+        reservation.CancelledById = _currentUser.UserId;
+        reservation.CancellationReason = dto.Reason;
+        reservation.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        // Faza 3: if the reservation was paid online, trigger a Stripe refund here.
+
+        await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
+            "Rezervacija otkazana",
+            $"Rezervacija {reservation.ReservationNumber} je otkazana. Razlog: {dto.Reason}");
+
+        return await GetByIdAsync(reservation.Id);
+    }
+
+    private async Task<PagedResult<ReservationDto>> QueryAsync(ReservationSearchObject search, IQueryable<Reservation> query)
+    {
+        if (search.CourtId.HasValue)
+            query = query.Where(r => r.CourtId == search.CourtId);
+        if (search.SportCenterId.HasValue)
+            query = query.Where(r => r.Court.SportCenterId == search.SportCenterId);
+        if (search.Status.HasValue)
+            query = query.Where(r => r.Status == search.Status);
+        if (search.DateFrom.HasValue)
+            query = query.Where(r => r.Date >= search.DateFrom);
+        if (search.DateTo.HasValue)
+            query = query.Where(r => r.Date <= search.DateTo);
+        if (!string.IsNullOrWhiteSpace(search.SearchTerm))
+            query = query.Where(r => r.ReservationNumber.Contains(search.SearchTerm));
+
+        var total = await query.CountAsync();
+        var page = search.Page < 1 ? 1 : search.Page;
+        var size = Math.Clamp(search.PageSize, 1, BaseSearchObject.MaxPageSize);
+
+        var items = await query
+            .OrderByDescending(r => r.Date).ThenByDescending(r => r.StartTime)
+            .Skip((page - 1) * size)
+            .Take(size)
+            .ProjectToType<ReservationDto>()
+            .ToListAsync();
+
+        return new PagedResult<ReservationDto> { Items = items, TotalCount = total, Page = page, PageSize = size };
+    }
+
+    private int RequireUser() =>
+        _currentUser.UserId ?? throw new BusinessException("Niste prijavljeni.");
+
+    private static string GenerateNumber() =>
+        $"RZ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}";
+}
