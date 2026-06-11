@@ -55,6 +55,15 @@ var rabbit = new RabbitMqSettings
 builder.Services.AddSingleton(Options.Create(rabbit));
 builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
+// ----- Stripe (sandbox) — optional: empty keys disable online payments, cash still works. -----
+var stripe = new StripeSettings
+{
+    SecretKey = OptionalEnv("STRIPE_SECRET_KEY", ""),
+    PublishableKey = OptionalEnv("STRIPE_PUBLISHABLE_KEY", ""),
+    WebhookSecret = OptionalEnv("STRIPE_WEBHOOK_SECRET", "")
+};
+builder.Services.AddSingleton(Options.Create(stripe));
+
 // ----- Persistence -----
 builder.Services.AddDbContext<DatabaseContext>(options => options.UseSqlServer(connectionString));
 

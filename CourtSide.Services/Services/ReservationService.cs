@@ -6,11 +6,13 @@ using CourtSide.Core.Exceptions;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Core.StateMachines;
 using CourtSide.Infrastructure;
+using CourtSide.Services.Payments;
 using CourtSide.Shared.Messages;
 using CourtSide.Shared.Messaging;
 using CourtSide.Shared.Services;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CourtSide.Services.Services;
 
@@ -30,14 +32,19 @@ public class ReservationService : IReservationService
     private readonly ICurrentUser _currentUser;
     private readonly INotificationService _notifications;
     private readonly IMessagePublisher _publisher;
+    private readonly IPaymentService _payments;
+    private readonly ILogger<ReservationService> _logger;
 
     public ReservationService(DatabaseContext db, ICurrentUser currentUser,
-        INotificationService notifications, IMessagePublisher publisher)
+        INotificationService notifications, IMessagePublisher publisher,
+        IPaymentService payments, ILogger<ReservationService> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _notifications = notifications;
         _publisher = publisher;
+        _payments = payments;
+        _logger = logger;
     }
 
     public async Task<PagedResult<ReservationDto>> GetPagedAsync(ReservationSearchObject search)
@@ -185,7 +192,17 @@ public class ReservationService : IReservationService
         reservation.CancellationReason = dto.Reason;
         reservation.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        // Faza 3: if the reservation was paid online, trigger a Stripe refund here.
+
+        // Refund any completed payment (Stripe online or cash). A refund failure must not block cancellation.
+        try
+        {
+            await _payments.RefundAsync(reservation.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Otkazivanje {Number}: automatski povrat nije uspio — potreban ručni povrat.",
+                reservation.ReservationNumber);
+        }
 
         await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
             "Rezervacija otkazana",
