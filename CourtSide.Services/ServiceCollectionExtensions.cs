@@ -1,6 +1,7 @@
 using CourtSide.Services.Auth;
 using CourtSide.Services.Payments;
 using CourtSide.Services.Recommender;
+using CourtSide.Services.Reports;
 using CourtSide.Services.Services;
 using CourtSide.Services.Validation;
 using CourtSide.Shared.Services;
@@ -39,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAvailabilityService, AvailabilityService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<IReportService, ReportService>();
 
         // Recommender (Faza 4): singleton model cache, scoped query service, background re-trainer.
         services.AddSingleton<IRecommenderModel, RecommenderModel>();

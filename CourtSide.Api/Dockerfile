@@ -8,9 +8,9 @@ RUN dotnet publish CourtSide.Api/CourtSide.Api.csproj -c Release -o /app/publish
 # Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
-# libgomp1: OpenMP runtime required by ML.NET Matrix Factorization native library (recommender).
+# Native deps: libgomp1 (ML.NET Matrix Factorization / recommender), libfontconfig1 (SkiaSharp/QuestPDF reports).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends libgomp1 libfontconfig1 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 EXPOSE 80
