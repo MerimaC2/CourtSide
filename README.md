@@ -65,5 +65,7 @@ flutter run -d windows --dart-define=API_BASE_URL=http://localhost:5000
 | Mobilna verzija (korisnik) | `mobile` | `test` |
 | Admin uloga | `admin` | `test` |
 
-> Status: **Faza 0 (skelet)** — backend solution kreiran, konfiguracija postavljena.
-> Implementacija funkcionalnosti slijedi po fazama (vidi plan).
+> Status: backend funkcionalan u Dockeru — auth/JWT, CRUD + reference, rezervacije (state machine,
+> dostupnost, overlap), poruke (RabbitMQ + email worker + SignalR), te **sistem preporuke (Faza 4,
+> ML.NET collaborative filtering** — vidi `recommender-dokumentacija.md`).
+> Slijedi: plaćanje (Stripe), izvještaji (QuestPDF), Flutter desktop/mobilna aplikacija.

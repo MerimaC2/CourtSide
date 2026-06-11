@@ -1,4 +1,5 @@
 using CourtSide.Services.Auth;
+using CourtSide.Services.Recommender;
 using CourtSide.Services.Services;
 using CourtSide.Services.Validation;
 using CourtSide.Shared.Services;
@@ -36,6 +37,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
         services.AddScoped<IReservationService, ReservationService>();
+
+        // Recommender (Faza 4): singleton model cache, scoped query service, background re-trainer.
+        services.AddSingleton<IRecommenderModel, RecommenderModel>();
+        services.AddScoped<IRecommenderService, RecommenderService>();
+        services.AddHostedService<RecommenderTrainingService>();
 
         return services;
     }

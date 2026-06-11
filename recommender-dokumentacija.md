@@ -1,6 +1,6 @@
 # Sistem preporuke — dokumentacija (CourtSide)
 
-> Status: skelet (popunjava se u Fazi 4). Implementacija MORA odgovarati ovoj dokumentaciji.
+> Status: implementirano (Faza 4). Kod prati ovu dokumentaciju (`CourtSide.Services/Recommender`).
 
 ## Pristup
 
@@ -42,4 +42,18 @@ Uz svaku preporuku vraća se objašnjenje, npr.:
 - Treniranje modela + perzistencija (sačuvani model fajl) + cache u memoriji.
 - Periodični re-train kroz `IHostedService` / pozadinski posao.
 
-_(Detalji parametara, ocjena modela i primjeri se dodaju u Fazi 4.)_
+## Implementacija (Faza 4)
+
+| Element | Detalj |
+|---|---|
+| Kod | `CourtSide.Services/Recommender/` (`RecommenderModel`, `RecommenderService`, `RecommenderTrainingService`) |
+| Algoritam | ML.NET `MatrixFactorizationTrainer`, `LossFunctionType.SquareLossOneClass` (implicit/one-class) |
+| Parametri | `ApproximationRank=32`, `NumberOfIterations=100`, `Lambda=0.025`, `Alpha=0.01`, `C=0.00001` |
+| Signali | `Reservation` (status ≠ Cancelled) + `CourtViewLog`; svaka interakcija = pozitivan signal (`Label=1`) |
+| Prag za treniranje | ≥ 6 interakcija, ≥ 2 korisnika, ≥ 2 terena; ispod toga samo fallback (popularnost) |
+| Keš + perzistencija | singleton `IRecommenderModel` u memoriji; model `models/recommender.zip` + `*.ids` sidecar |
+| Re-train | `RecommenderTrainingService` (BackgroundService): warm-load s diska na startu, trening na startu, pa svakih 6h |
+| API | `GET /api/recommendations?count=3` (prijavljeni korisnik); `POST /api/courts/{id}/view` (log pregleda); `POST /api/recommendations/retrain` (admin, ručni re-train) |
+| Izuzimanje | preporuke ne uključuju terene koje je korisnik već rezervisao |
+
+> Native zavisnost: ML.NET MF traži `libgomp1` (OpenMP) — instalirana u runtime sloju `CourtSide.Api/Dockerfile`.
