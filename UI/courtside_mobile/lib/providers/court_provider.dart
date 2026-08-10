@@ -6,4 +6,12 @@ class CourtProvider extends BaseProvider<Court> {
 
   @override
   Court fromJson(Map<String, dynamic> json) => Court.fromJson(json);
+
+  /// Logs an implicit "viewed this court" signal for the recommender.
+  Future<void> logView(int id) async {
+    final response = await http.post(
+        Uri.parse('${BaseProvider.baseUrl}$endpoint/$id/view'),
+        headers: createHeaders());
+    isValidResponse(response);
+  }
 }

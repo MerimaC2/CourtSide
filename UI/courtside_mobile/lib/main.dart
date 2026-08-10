@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/auth_provider.dart';
+import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
 import 'providers/court_provider.dart';
+import 'providers/payment_provider.dart';
+import 'providers/recommendation_provider.dart';
+import 'providers/reservation_provider.dart';
 import 'providers/sport_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'utils/app_navigator.dart';
@@ -23,6 +27,10 @@ void main() {
         ChangeNotifierProvider(create: (_) => CourtProvider()),
         ChangeNotifierProvider(create: (_) => SportProvider()),
         ChangeNotifierProvider(create: (_) => CityProvider()),
+        ChangeNotifierProvider(create: (_) => AvailabilityProvider()),
+        ChangeNotifierProvider(create: (_) => ReservationProvider()),
+        ChangeNotifierProvider(create: (_) => PaymentProvider()),
+        ChangeNotifierProvider(create: (_) => RecommendationProvider()),
       ],
       child: const CourtSideApp(),
     ),
