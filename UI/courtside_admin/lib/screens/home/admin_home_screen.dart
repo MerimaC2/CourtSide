@@ -4,6 +4,7 @@ import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
 import '../courts/courts_screen.dart';
+import '../schedule/schedule_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -68,7 +69,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               index: _selectedIndex,
               children: [
                 const CourtsScreen(),
-                _buildPlaceholder(_sections[1]),
+                const ScheduleScreen(),
                 _buildPlaceholder(_sections[2]),
                 _buildPlaceholder(_sections[3]),
               ],

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/auth_provider.dart';
+import 'providers/availability_block_provider.dart';
+import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
 import 'providers/court_provider.dart';
 import 'providers/sport_center_provider.dart';
@@ -25,6 +27,8 @@ void main() {
         ChangeNotifierProvider(create: (_) => SportProvider()),
         ChangeNotifierProvider(create: (_) => CityProvider()),
         ChangeNotifierProvider(create: (_) => SportCenterProvider()),
+        ChangeNotifierProvider(create: (_) => AvailabilityProvider()),
+        ChangeNotifierProvider(create: (_) => AvailabilityBlockProvider()),
       ],
       child: const CourtSideAdminApp(),
     ),
