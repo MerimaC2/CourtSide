@@ -2,13 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart';
 import 'package:http/io_client.dart';
 
 import '../models/auth_user.dart';
 import '../utils/authorization.dart';
 import 'base_provider.dart';
 
-/// Authentication against POST /api/auth/login. Stores the JWT + claims in [Authorization].
+/// Authentication against POST /api/auth/login and /api/auth/register.
+/// Stores the JWT + claims in [Authorization].
 class AuthProvider with ChangeNotifier {
   static String get _baseUrl => BaseProvider.baseUrl;
   late final IOClient _http;
@@ -24,9 +26,35 @@ class AuthProvider with ChangeNotifier {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password}),
     );
+    return _handleAuthResponse(response, fallbackError: 'Pogrešno korisničko ime ili lozinka.');
+  }
 
+  Future<AuthUser> signUp({
+    required String username,
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    String? phoneNumber,
+  }) async {
+    final response = await _http.post(
+      Uri.parse('${_baseUrl}auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'username': username,
+        'email': email,
+        'password': password,
+        'firstName': firstName,
+        'lastName': lastName,
+        if (phoneNumber != null && phoneNumber.isNotEmpty) 'phoneNumber': phoneNumber,
+      }),
+    );
+    return _handleAuthResponse(response, fallbackError: 'Registracija nije uspjela.');
+  }
+
+  AuthUser _handleAuthResponse(Response response, {required String fallbackError}) {
     if (response.statusCode >= 300) {
-      String message = 'Pogrešno korisničko ime ili lozinka.';
+      String message = fallbackError;
       try {
         final body = jsonDecode(response.body);
         message = (body['message'] as String?)?.trim() ?? message;
