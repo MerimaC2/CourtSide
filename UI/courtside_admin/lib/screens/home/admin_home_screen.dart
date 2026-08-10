@@ -4,6 +4,7 @@ import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
 import '../courts/courts_screen.dart';
+import '../reports/reports_screen.dart';
 import '../reservations/reservations_screen.dart';
 import '../schedule/schedule_screen.dart';
 
@@ -72,23 +73,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 const CourtsScreen(),
                 const ScheduleScreen(),
                 const ReservationsScreen(),
-                _buildPlaceholder(_sections[3]),
+                const ReportsScreen(),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder(_Section section) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(section.icon, size: 56, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          Text('${section.label} — uskoro', style: TextStyle(color: Colors.grey.shade500)),
         ],
       ),
     );
