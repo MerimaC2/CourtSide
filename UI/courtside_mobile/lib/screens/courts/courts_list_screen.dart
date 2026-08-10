@@ -10,6 +10,7 @@ import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
+import '../reservations/my_reservations_screen.dart';
 import 'court_details_screen.dart';
 
 class CourtsListScreen extends StatefulWidget {
@@ -102,6 +103,13 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            tooltip: 'Moje rezervacije',
+            icon: const Icon(Icons.event_note_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MyReservationsScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Odjava',
             icon: const Icon(Icons.logout),
