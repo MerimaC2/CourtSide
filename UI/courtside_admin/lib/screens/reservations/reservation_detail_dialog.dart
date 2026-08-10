@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/payment.dart';
 import '../../models/reservation.dart';
+import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
 
@@ -18,12 +20,54 @@ class ReservationDetailDialog extends StatefulWidget {
 
 class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
   late Reservation _reservation;
+  Payment? _payment;
   bool _busy = false;
+  bool _loadingPayment = true;
 
   @override
   void initState() {
     super.initState();
     _reservation = widget.reservation;
+    _loadPayment();
+  }
+
+  Future<void> _loadPayment() async {
+    try {
+      final payment = await context.read<PaymentProvider>().getForReservation(_reservation.id);
+      if (mounted) setState(() => _payment = payment);
+    } catch (_) {
+      // No payment record yet, or fetch failed — payment section just stays hidden.
+    } finally {
+      if (mounted) setState(() => _loadingPayment = false);
+    }
+  }
+
+  Future<void> _payCash() async {
+    setState(() => _busy = true);
+    try {
+      final payment = await context.read<PaymentProvider>().payCash(_reservation.id);
+      if (!mounted) return;
+      setState(() => _payment = payment);
+      showSuccess(context, 'Uplata gotovinom je evidentirana.');
+    } catch (e) {
+      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refund() async {
+    setState(() => _busy = true);
+    try {
+      final payment = await context.read<PaymentProvider>().refund(_reservation.id);
+      if (!mounted) return;
+      if (payment != null) setState(() => _payment = payment);
+      showSuccess(context, 'Refund je pokrenut.');
+    } catch (e) {
+      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _confirm() async {
@@ -100,6 +144,8 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
               if (r.note != null && r.note!.isNotEmpty) _row('Napomena', r.note!),
               if (r.cancellationReason != null && r.cancellationReason!.isNotEmpty)
                 _row('Razlog otkazivanja', r.cancellationReason!),
+              const Divider(height: 24),
+              _buildPaymentSection(),
             ],
           ),
         ),
@@ -115,6 +161,16 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
             child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
           )
         else ...[
+          if (_payment != null &&
+              _payment!.method == 'Cash' &&
+              _payment!.status == 'Pending')
+            OutlinedButton(onPressed: _payCash, child: const Text('Označi kao plaćeno')),
+          if (_payment != null && _payment!.status == 'Completed')
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: _refund,
+              child: const Text('Refundiraj'),
+            ),
           if (r.isActive)
             TextButton(
               onPressed: _cancel,
@@ -124,6 +180,32 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
           if (r.status == 'Pending')
             FilledButton(onPressed: _confirm, child: const Text('Potvrdi')),
         ],
+      ],
+    );
+  }
+
+  Widget _buildPaymentSection() {
+    if (_loadingPayment) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+            width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    final payment = _payment;
+    if (payment == null) {
+      return Text('Nema podataka o plaćanju.', style: TextStyle(color: Colors.grey.shade600));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Plaćanje', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        _row('Iznos', formatPrice(payment.amount)),
+        _row('Status', payment.status),
+        if (payment.paidAt != null) _row('Plaćeno', payment.paidAt.toString()),
+        if (payment.refundedAmount != null)
+          _row('Refundirano', formatPrice(payment.refundedAmount)),
       ],
     );
   }

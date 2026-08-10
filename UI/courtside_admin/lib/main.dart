@@ -6,6 +6,7 @@ import 'providers/availability_block_provider.dart';
 import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
 import 'providers/court_provider.dart';
+import 'providers/payment_provider.dart';
 import 'providers/reservation_provider.dart';
 import 'providers/sport_center_provider.dart';
 import 'providers/sport_provider.dart';
@@ -31,6 +32,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => AvailabilityProvider()),
         ChangeNotifierProvider(create: (_) => AvailabilityBlockProvider()),
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
+        ChangeNotifierProvider(create: (_) => PaymentProvider()),
       ],
       child: const CourtSideAdminApp(),
     ),
