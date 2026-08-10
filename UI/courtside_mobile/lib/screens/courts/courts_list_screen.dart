@@ -10,6 +10,7 @@ import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
+import 'court_details_screen.dart';
 
 class CourtsListScreen extends StatefulWidget {
   const CourtsListScreen({super.key});
@@ -237,7 +238,9 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
           style: const TextStyle(
               fontWeight: FontWeight.bold, color: kPrimaryColor),
         ),
-        onTap: () => showSuccess(context, 'Detalj terena — uskoro (${court.name})'),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => CourtDetailsScreen(court: court)),
+        ),
       ),
     );
   }
