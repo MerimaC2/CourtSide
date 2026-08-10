@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/court.dart';
 import '../../providers/court_provider.dart';
 import '../../utils/util.dart';
+import '../reservations/availability_screen.dart';
 
 class CourtDetailsScreen extends StatefulWidget {
   final Court court;
@@ -80,7 +81,9 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.calendar_month_outlined),
                 label: const Text('Provjeri dostupnost'),
-                onPressed: () => showSuccess(context, 'Dostupnost — uskoro (${court.name})'),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => AvailabilityScreen(court: court)),
+                ),
               ),
             ),
           ],
