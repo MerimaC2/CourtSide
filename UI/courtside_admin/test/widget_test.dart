@@ -24,5 +24,6 @@ void main() {
     );
 
     expect(find.text('CourtSide Admin'), findsWidgets);
+    expect(find.text('Prijava'), findsWidgets);
   });
 }

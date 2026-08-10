@@ -6,13 +6,14 @@ import 'providers/city_provider.dart';
 import 'providers/court_provider.dart';
 import 'providers/sport_center_provider.dart';
 import 'providers/sport_provider.dart';
+import 'screens/auth/login_screen.dart';
 import 'utils/app_navigator.dart';
 import 'utils/util.dart';
 
 void main() {
   onUnauthorized = () {
     appNavigatorKey.currentState?.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const _PlaceholderHome()),
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
     );
   };
@@ -58,19 +59,7 @@ class CourtSideAdminApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const _PlaceholderHome(),
-    );
-  }
-}
-
-/// Temporary home screen — replaced by the real login screen in the next step.
-class _PlaceholderHome extends StatelessWidget {
-  const _PlaceholderHome();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('CourtSide Admin')),
+      home: const LoginScreen(),
     );
   }
 }
