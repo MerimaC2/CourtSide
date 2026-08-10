@@ -4,6 +4,7 @@ import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
 import '../courts/courts_screen.dart';
+import '../reservations/reservations_screen.dart';
 import '../schedule/schedule_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
@@ -70,7 +71,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               children: [
                 const CourtsScreen(),
                 const ScheduleScreen(),
-                _buildPlaceholder(_sections[2]),
+                const ReservationsScreen(),
                 _buildPlaceholder(_sections[3]),
               ],
             ),
