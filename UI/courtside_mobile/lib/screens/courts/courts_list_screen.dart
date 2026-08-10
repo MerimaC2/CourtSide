@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../models/city.dart';
 import '../../models/court.dart';
+import '../../models/recommendation.dart';
 import '../../models/sport.dart';
 import '../../providers/city_provider.dart';
 import '../../providers/court_provider.dart';
+import '../../providers/recommendation_provider.dart';
 import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
@@ -25,6 +27,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
   List<Sport> _sports = [];
   List<City> _cities = [];
   List<Court> _courts = [];
+  List<Recommendation> _recommendations = [];
   int? _sportId;
   int? _cityId;
   bool _loading = true;
@@ -45,6 +48,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
   Future<void> _init() async {
     final sportProvider = context.read<SportProvider>();
     final cityProvider = context.read<CityProvider>();
+    final recommendationProvider = context.read<RecommendationProvider>();
     try {
       final sports = await sportProvider.get(filter: {'Page': 1, 'PageSize': 100});
       final cities = await cityProvider.get(filter: {'Page': 1, 'PageSize': 100});
@@ -55,6 +59,13 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       });
     } catch (_) {
       // Filters are optional; ignore load failures here.
+    }
+    try {
+      final recommendations = await recommendationProvider.getRecommendations(count: 3);
+      if (!mounted) return;
+      setState(() => _recommendations = recommendations);
+    } catch (_) {
+      // Recommendations are a bonus section; ignore load failures here.
     }
     await _loadCourts();
   }
@@ -120,8 +131,98 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       body: Column(
         children: [
           _buildFilters(),
+          if (_recommendations.isNotEmpty) _buildRecommendations(),
           Expanded(child: _buildBody()),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecommendations() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text('Preporučeno za tebe',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        ),
+        SizedBox(
+          height: 128,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _recommendations.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (_, i) => _recommendationCard(_recommendations[i]),
+          ),
+        ),
+        const Divider(height: 20),
+      ],
+    );
+  }
+
+  Widget _recommendationCard(Recommendation recommendation) {
+    return SizedBox(
+      width: 220,
+      child: Card(
+        elevation: 0,
+        color: kPrimaryColor.withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(color: kPrimaryColor.withValues(alpha: 0.25)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => CourtDetailsScreen(
+                court: Court(
+                  id: recommendation.courtId,
+                  name: recommendation.courtName,
+                  sportId: 0,
+                  sportName: recommendation.sportName,
+                  sportCenterId: 0,
+                  sportCenterName: recommendation.sportCenterName,
+                  pricePerHour: recommendation.pricePerHour,
+                  isActive: true,
+                  primaryImageId: recommendation.primaryImageId,
+                ),
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(recommendation.courtName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(
+                  [recommendation.sportName, recommendation.sportCenterName]
+                      .where((e) => e != null && e.isNotEmpty)
+                      .join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const Spacer(),
+                Text(
+                  recommendation.reason,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 4),
+                Text(formatPrice(recommendation.pricePerHour),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryColor)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
