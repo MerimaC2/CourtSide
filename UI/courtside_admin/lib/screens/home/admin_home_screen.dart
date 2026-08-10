@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../auth/login_screen.dart';
+import '../courts/courts_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -62,14 +63,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 .toList(),
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: _buildSectionBody()),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                const CourtsScreen(),
+                _buildPlaceholder(_sections[1]),
+                _buildPlaceholder(_sections[2]),
+                _buildPlaceholder(_sections[3]),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionBody() {
-    final section = _sections[_selectedIndex];
+  Widget _buildPlaceholder(_Section section) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
