@@ -5,6 +5,7 @@ import '../../models/availability_slot.dart';
 import '../../models/court.dart';
 import '../../providers/availability_provider.dart';
 import '../../utils/util.dart';
+import 'booking_form_screen.dart';
 
 class AvailabilityScreen extends StatefulWidget {
   final Court court;
@@ -60,7 +61,12 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   }
 
   void _selectSlot(AvailabilitySlot slot) {
-    showSuccess(context, 'Rezervacija — uskoro (${slot.label})');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            BookingFormScreen(court: widget.court, date: _selectedDate, slot: slot),
+      ),
+    );
   }
 
   @override
