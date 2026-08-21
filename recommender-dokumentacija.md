@@ -1,6 +1,6 @@
 # Sistem preporuke — dokumentacija (CourtSide)
 
-> Status: implementirano (Faza 4). Kod prati ovu dokumentaciju (`CourtSide.Services/Recommender`).
+> Status: implementirano. Kod prati ovu dokumentaciju (`CourtSide.Services/Recommender`).
 
 ## Pristup
 
@@ -42,7 +42,7 @@ Uz svaku preporuku vraća se objašnjenje, npr.:
 - Treniranje modela + perzistencija (sačuvani model fajl) + cache u memoriji.
 - Periodični re-train kroz `IHostedService` / pozadinski posao.
 
-## Implementacija (Faza 4)
+## Implementacija
 
 | Element | Detalj |
 |---|---|

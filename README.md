@@ -33,7 +33,7 @@ UI/courtside_admin        Flutter desktop (admin)
 UI/courtside_mobile       Flutter mobilna (korisnik)
 ```
 
-## Pokretanje (TODO — dopuniti kroz faze)
+## Pokretanje
 
 ### Preduslovi
 - .NET 9 SDK, Docker Desktop, Flutter SDK, Android SDK + AVD, JDK 17
@@ -41,7 +41,7 @@ UI/courtside_mobile       Flutter mobilna (korisnik)
 
 ### Backend (Docker)
 ```bash
-docker compose up -d            # SQL Server + RabbitMQ (+ API + Worker u Fazi 1/2)
+docker compose up -d            # SQL Server + RabbitMQ + API + Worker
 # Swagger: http://localhost:5000/swagger
 ```
 
@@ -65,7 +65,7 @@ flutter run -d windows --dart-define=API_BASE_URL=http://localhost:5000
 | Mobilna verzija (korisnik) | `mobile` | `test` |
 | Admin uloga | `admin` | `test` |
 
-> Status: backend funkcionalan u Dockeru — auth/JWT, CRUD + reference, rezervacije (state machine,
-> dostupnost, overlap), poruke (RabbitMQ + email worker + SignalR), te **sistem preporuke (Faza 4,
-> ML.NET collaborative filtering** — vidi `recommender-dokumentacija.md`).
-> Slijedi: plaćanje (Stripe), izvještaji (QuestPDF), Flutter desktop/mobilna aplikacija.
+> Status: backend, desktop (admin) i mobilna aplikacija su funkcionalni — auth/JWT, CRUD + reference,
+> rezervacije (state machine, dostupnost, overlap), poruke (RabbitMQ + email worker + SignalR),
+> plaćanje (Stripe + gotovina), izvještaji (QuestPDF) i sistem preporuke (ML.NET collaborative
+> filtering — vidi `recommender-dokumentacija.md`).

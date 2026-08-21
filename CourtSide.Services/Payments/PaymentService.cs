@@ -33,7 +33,7 @@ public interface IPaymentService
 
 /// <summary>
 /// Payment workflow for reservations: Stripe (sandbox) online payments via PaymentIntent + webhook,
-/// plus on-site cash and refunds. Implements the "Faza 3" payment flow.
+/// plus on-site cash and refunds.
 /// </summary>
 public class PaymentService : IPaymentService
 {

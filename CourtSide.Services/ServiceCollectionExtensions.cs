@@ -42,7 +42,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IReportService, ReportService>();
 
-        // Recommender (Faza 4): singleton model cache, scoped query service, background re-trainer.
+        // Recommender: singleton model cache, scoped query service, background re-trainer.
         services.AddSingleton<IRecommenderModel, RecommenderModel>();
         services.AddScoped<IRecommenderService, RecommenderService>();
         services.AddHostedService<RecommenderTrainingService>();

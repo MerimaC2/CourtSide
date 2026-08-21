@@ -13,7 +13,7 @@ public interface IReportService
     Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId);
 }
 
-/// <summary>Generates PDF reports with QuestPDF (Faza: izvještaji).</summary>
+/// <summary>Generates PDF reports with QuestPDF.</summary>
 public class ReportService : IReportService
 {
     private static readonly Dictionary<ReservationStatus, string> StatusLabels = new()
