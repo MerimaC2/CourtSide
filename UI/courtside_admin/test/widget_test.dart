@@ -7,12 +7,14 @@ import 'package:courtside_admin/providers/city_provider.dart';
 import 'package:courtside_admin/providers/court_provider.dart';
 import 'package:courtside_admin/providers/sport_center_provider.dart';
 import 'package:courtside_admin/providers/sport_provider.dart';
+import 'package:courtside_admin/utils/app_locale.dart';
 
 void main() {
   testWidgets('App renders', (WidgetTester tester) async {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
+          ChangeNotifierProvider(create: (_) => LocaleProvider()),
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => CourtProvider()),
           ChangeNotifierProvider(create: (_) => SportProvider()),

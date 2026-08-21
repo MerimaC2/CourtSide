@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/sport_center.dart';
 import '../../providers/report_provider.dart';
 import '../../providers/sport_center_provider.dart';
@@ -83,10 +84,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Izvještaj je sačuvan.'),
+          content: Text(tr(context, 'Izvještaj je sačuvan.')),
           backgroundColor: kPrimaryColor,
           action: SnackBarAction(
-            label: 'Otvori',
+            label: tr(context, 'Otvori'),
             textColor: Colors.white,
             onPressed: () => launchUrl(Uri.file(file.path)),
           ),
@@ -106,11 +107,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Izvještaj o rezervacijama',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(tr(context, 'Izvještaj o rezervacijama'),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(
-            'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.',
+            tr(context, 'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.'),
             style: TextStyle(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 24),
@@ -123,24 +124,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 onPressed: () => _pickDate(from: true),
                 icon: const Icon(Icons.calendar_today_outlined, size: 16),
                 label: Text(_dateFrom == null
-                    ? 'Od datuma'
+                    ? tr(context, 'Od datuma')
                     : formatDisplayDate(formatApiDate(_dateFrom!))),
               ),
               OutlinedButton.icon(
                 onPressed: () => _pickDate(from: false),
                 icon: const Icon(Icons.calendar_today_outlined, size: 16),
-                label: Text(
-                    _dateTo == null ? 'Do datuma' : formatDisplayDate(formatApiDate(_dateTo!))),
+                label: Text(_dateTo == null
+                    ? tr(context, 'Do datuma')
+                    : formatDisplayDate(formatApiDate(_dateTo!))),
               ),
               SizedBox(
                 width: 220,
                 child: DropdownButtonFormField<int?>(
                   initialValue: _sportCenterId,
-                  decoration: const InputDecoration(labelText: 'Sportski centar'),
+                  isExpanded: true,
+                  decoration: InputDecoration(labelText: tr(context, 'Sportski centar')),
                   items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('Svi centri')),
-                    ..._sportCenters
-                        .map((c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name))),
+                    DropdownMenuItem<int?>(value: null, child: Text(tr(context, 'Svi centri'))),
+                    ..._sportCenters.map((c) => DropdownMenuItem<int?>(
+                        value: c.id,
+                        child: Text(c.name, overflow: TextOverflow.ellipsis))),
                   ],
                   onChanged: (v) => setState(() => _sportCenterId = v),
                 ),
@@ -156,7 +160,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 : ElevatedButton.icon(
                     onPressed: _generate,
                     icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: const Text('Generiši i sačuvaj PDF'),
+                    label: Text(tr(context, 'Generiši i sačuvaj PDF')),
                   ),
           ),
         ],

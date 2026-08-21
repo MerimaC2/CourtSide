@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../models/sport.dart';
 import '../../models/sport_center.dart';
@@ -62,7 +63,10 @@ class _CourtsScreenState extends State<CourtsScreen> {
         _courts = courts.result;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -98,14 +102,14 @@ class _CourtsScreenState extends State<CourtsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Brisanje terena'),
-        content: Text('Obrisati teren "${court.name}"?'),
+        title: Text(tr(ctx, 'Brisanje terena')),
+        content: Text('${trMessage(ctx, 'Obrisati teren')} "${court.name}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Odustani')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr(ctx, 'Odustani'))),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Obriši'),
+            child: Text(tr(ctx, 'Obriši')),
           ),
         ],
       ),
@@ -134,7 +138,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
                 child: TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Pretraga terena...',
+                    hintText: tr(context, 'Pretraga terena...'),
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.arrow_forward),
@@ -148,7 +152,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
               FilledButton.icon(
                 onPressed: (_sports.isEmpty || _sportCenters.isEmpty) ? null : () => _openForm(),
                 icon: const Icon(Icons.add),
-                label: const Text('Dodaj teren'),
+                label: Text(tr(context, 'Dodaj teren')),
               ),
             ],
           ),
@@ -170,23 +174,23 @@ class _CourtsScreenState extends State<CourtsScreen> {
             const SizedBox(height: 12),
             Text(_error!),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _load, child: const Text('Pokušaj ponovo')),
+            ElevatedButton(onPressed: _load, child: Text(tr(context, 'Pokušaj ponovo'))),
           ],
         ),
       );
     }
     if (_courts.isEmpty) {
-      return const Center(child: Text('Nema terena.'));
+      return Center(child: Text(tr(context, 'Nema terena.')));
     }
     return SingleChildScrollView(
       child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Naziv')),
-          DataColumn(label: Text('Sport')),
-          DataColumn(label: Text('Sportski centar')),
-          DataColumn(label: Text('Cijena/h')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Akcije')),
+        columns: [
+          DataColumn(label: Text(tr(context, 'Naziv'))),
+          const DataColumn(label: Text('Sport')),
+          DataColumn(label: Text(tr(context, 'Sportski centar'))),
+          DataColumn(label: Text(tr(context, 'Cijena/h'))),
+          const DataColumn(label: Text('Status')),
+          DataColumn(label: Text(tr(context, 'Akcije'))),
         ],
         rows: _courts.map((court) {
           return DataRow(cells: [
@@ -194,17 +198,17 @@ class _CourtsScreenState extends State<CourtsScreen> {
             DataCell(Text(court.sportName ?? '-')),
             DataCell(Text(court.sportCenterName ?? '-')),
             DataCell(Text(formatPrice(court.pricePerHour))),
-            DataCell(_statusChip(court.isActive)),
+            DataCell(_statusChip(context, court.isActive)),
             DataCell(Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Uredi',
+                  tooltip: tr(context, 'Uredi'),
                   icon: const Icon(Icons.edit_outlined, size: 20),
                   onPressed: () => _openForm(court: court),
                 ),
                 IconButton(
-                  tooltip: 'Obriši',
+                  tooltip: tr(context, 'Obriši'),
                   icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
                   onPressed: () => _delete(court),
                 ),
@@ -216,7 +220,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
     );
   }
 
-  Widget _statusChip(bool isActive) {
+  Widget _statusChip(BuildContext context, bool isActive) {
     final color = isActive ? kPrimaryColor : Colors.grey;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -224,7 +228,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(isActive ? 'Aktivan' : 'Neaktivan',
+      child: Text(tr(context, isActive ? 'Aktivan' : 'Neaktivan'),
           style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }

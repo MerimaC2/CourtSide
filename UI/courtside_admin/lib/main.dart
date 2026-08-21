@@ -12,19 +12,24 @@ import 'providers/reservation_provider.dart';
 import 'providers/sport_center_provider.dart';
 import 'providers/sport_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'utils/app_locale.dart';
 import 'utils/app_navigator.dart';
 import 'utils/util.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   onUnauthorized = () {
     appNavigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
     );
   };
+  final localeProvider = LocaleProvider();
+  await localeProvider.load();
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: localeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CourtProvider()),
         ChangeNotifierProvider(create: (_) => SportProvider()),

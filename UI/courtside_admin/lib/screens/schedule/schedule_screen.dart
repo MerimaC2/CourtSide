@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/availability_block.dart';
 import '../../models/availability_slot.dart';
 import '../../models/court.dart';
@@ -45,8 +46,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (_courtId != null) _loadSchedule();
     } catch (e) {
       if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
         setState(() {
-          _error = e.toString().replaceFirst('Exception: ', '');
+          _error = trMessage(context, message);
           _loadingCourts = false;
         });
       }
@@ -70,9 +72,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         _blocks = blocks;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
+      }
     } finally {
       if (mounted) setState(() => _loadingSlots = false);
+    }
+  }
+
+  Future<void> _refreshCourts() async {
+    try {
+      final result =
+          await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': 200});
+      if (!mounted) return;
+      setState(() {
+        _courts = result.result;
+        if (_courtId != null && !_courts.any((c) => c.id == _courtId)) {
+          _courtId = _courts.isNotEmpty ? _courts.first.id : null;
+        }
+      });
+    } catch (_) {
+      // Keep the existing list if the refresh fails; the dropdown just stays as-is.
     }
   }
 
@@ -108,17 +129,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Blokiraj termin ${slot.label}'),
+        title: Text('${tr(ctx, 'Blokiraj termin')} ${slot.label}'),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(labelText: 'Razlog (opciono)'),
+          decoration: InputDecoration(labelText: tr(ctx, 'Razlog (opciono)')),
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Odustani')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr(ctx, 'Odustani'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(reasonController.text.trim()),
-            child: const Text('Blokiraj'),
+            child: Text(tr(ctx, 'Blokiraj')),
           ),
         ],
       ),
@@ -148,13 +169,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Odblokiraj termin ${slot.label}'),
+        title: Text('${tr(ctx, 'Odblokiraj termin')} ${slot.label}'),
         content: Text(block.reason?.isNotEmpty == true
-            ? 'Razlog blokade: ${block.reason}'
-            : 'Ukloniti blokadu ovog termina?'),
+            ? '${tr(ctx, 'Razlog blokade')}: ${block.reason}'
+            : tr(ctx, 'Ukloniti blokadu ovog termina?')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Odustani')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Odblokiraj')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr(ctx, 'Odustani'))),
+          FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true), child: Text(tr(ctx, 'Odblokiraj'))),
         ],
       ),
     );
@@ -173,7 +195,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loadingCourts) return const Center(child: CircularProgressIndicator());
-    if (_courts.isEmpty) return const Center(child: Text('Nema terena. Prvo dodajte teren.'));
+    if (_courts.isEmpty) {
+      return Center(child: Text(tr(context, 'Nema terena. Prvo dodajte teren.')));
+    }
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -185,7 +209,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   initialValue: _courtId,
-                  decoration: const InputDecoration(labelText: 'Teren'),
+                  decoration: InputDecoration(labelText: tr(context, 'Teren')),
+                  onTap: _refreshCourts,
                   items: _courts
                       .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                       .toList(),
@@ -201,7 +226,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   onTap: _pickDate,
                   borderRadius: BorderRadius.circular(12),
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Datum'),
+                    decoration: InputDecoration(labelText: tr(context, 'Datum')),
                     child: Row(
                       children: [
                         Text(formatDisplayDate(formatApiDate(_selectedDate))),
@@ -232,13 +257,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             const SizedBox(height: 12),
             Text(_error!),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _loadSchedule, child: const Text('Pokušaj ponovo')),
+            ElevatedButton(onPressed: _loadSchedule, child: Text(tr(context, 'Pokušaj ponovo'))),
           ],
         ),
       );
     }
     if (_slots.isEmpty) {
-      return const Center(child: Text('Nema definisanih termina za odabrani datum.'));
+      return Center(child: Text(tr(context, 'Nema definisanih termina za odabrani datum.')));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,7 +303,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       children: [
         Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        Text(tr(context, label), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
       ],
     );
   }

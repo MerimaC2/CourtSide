@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../l10n/translations.dart';
+import 'app_locale.dart';
 
 const Color kPrimaryColor = Color(0xFF1B7A43); // CourtSide green
 
@@ -16,16 +20,62 @@ String formatDisplayDate(String apiDate) {
   return DateFormat('dd.MM.yyyy.').format(parsed);
 }
 
-/// Shows a red error snackbar with [message].
+/// Display label for a reservation status. The API always returns these in
+/// English (`Pending`, `Confirmed`, ...) — comparisons against the raw value
+/// elsewhere in the app must keep using the English string; this is for
+/// display only, and respects the currently selected UI language.
+String translateReservationStatus(BuildContext context, String status) {
+  if (context.watch<LocaleProvider>().language == AppLanguage.en) return status;
+  return switch (status) {
+    'Pending' => 'Na čekanju',
+    'Confirmed' => 'Potvrđena',
+    'Cancelled' => 'Otkazana',
+    'Completed' => 'Završena',
+    _ => status,
+  };
+}
+
+/// Display label for a payment status (see [translateReservationStatus]).
+String translatePaymentStatus(BuildContext context, String status) {
+  if (context.watch<LocaleProvider>().language == AppLanguage.en) return status;
+  return switch (status) {
+    'Pending' => 'Na čekanju',
+    'Completed' => 'Plaćeno',
+    'Refunded' => 'Refundirano',
+    'Failed' => 'Neuspjelo',
+    _ => status,
+  };
+}
+
+/// Display label for a payment method (see [translateReservationStatus]).
+String translatePaymentMethod(BuildContext context, String method) {
+  if (context.watch<LocaleProvider>().language == AppLanguage.en) return method;
+  return switch (method) {
+    'Cash' => 'Gotovina',
+    'Stripe' => 'Kartica',
+    _ => method,
+  };
+}
+
+/// Shortens a reservation number like `RZ-20260811121848-FFD2` to just its
+/// unique suffix (`FFD2`) for compact display; falls back to the full string
+/// if it doesn't match the expected `RZ-<timestamp>-<suffix>` shape.
+String shortReservationNumber(String reservationNumber) {
+  final parts = reservationNumber.split('-');
+  return parts.length == 3 ? parts.last : reservationNumber;
+}
+
+/// Shows a red error snackbar with [message] (translated if it matches a
+/// known backend/client message and English is selected).
 void showError(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), backgroundColor: Colors.red),
+    SnackBar(content: Text(trMessage(context, message)), backgroundColor: Colors.red),
   );
 }
 
-/// Shows a green success snackbar with [message].
+/// Shows a green success snackbar with [message] (see [showError]).
 void showSuccess(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), backgroundColor: kPrimaryColor),
+    SnackBar(content: Text(trMessage(context, message)), backgroundColor: kPrimaryColor),
   );
 }

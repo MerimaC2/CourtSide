@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../models/sport.dart';
 import '../../models/sport_center.dart';
@@ -96,11 +97,12 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.court == null ? 'Novi teren' : 'Uređivanje terena'),
+      title: Text(tr(context, widget.court == null ? 'Novi teren' : 'Uređivanje terena')),
       content: SizedBox(
         width: 420,
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -108,8 +110,9 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
               children: [
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Naziv'),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Unesite naziv' : null,
+                  decoration: InputDecoration(labelText: tr(context, 'Naziv')),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? tr(context, 'Unesite naziv') : null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
@@ -119,26 +122,26 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                       .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
                       .toList(),
                   onChanged: (v) => setState(() => _sportId = v),
-                  validator: (v) => v == null ? 'Odaberite sport' : null,
+                  validator: (v) => v == null ? tr(context, 'Odaberite sport') : null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: _sportCenterId,
-                  decoration: const InputDecoration(labelText: 'Sportski centar'),
+                  decoration: InputDecoration(labelText: tr(context, 'Sportski centar')),
                   items: widget.sportCenters
                       .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                       .toList(),
                   onChanged: (v) => setState(() => _sportCenterId = v),
-                  validator: (v) => v == null ? 'Odaberite sportski centar' : null,
+                  validator: (v) => v == null ? tr(context, 'Odaberite sportski centar') : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _priceController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'Cijena po satu (KM)'),
+                  decoration: InputDecoration(labelText: tr(context, 'Cijena po satu (KM)')),
                   validator: (v) {
                     final value = double.tryParse((v ?? '').trim().replaceAll(',', '.'));
-                    if (value == null || value <= 0) return 'Unesite ispravnu cijenu';
+                    if (value == null || value <= 0) return tr(context, 'Unesite ispravnu cijenu');
                     return null;
                   },
                 ),
@@ -146,12 +149,12 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                 TextFormField(
                   controller: _descriptionController,
                   maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Opis (opciono)'),
+                  decoration: InputDecoration(labelText: tr(context, 'Opis (opciono)')),
                 ),
                 const SizedBox(height: 4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Aktivan'),
+                  title: Text(tr(context, 'Aktivan')),
                   value: _isActive,
                   onChanged: (v) => setState(() => _isActive = v),
                 ),
@@ -163,9 +166,9 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Odustani'),
+          child: Text(tr(context, 'Odustani')),
         ),
-        FilledButton(onPressed: _save, child: const Text('Sačuvaj')),
+        FilledButton(onPressed: _save, child: Text(tr(context, 'Sačuvaj'))),
       ],
     );
   }

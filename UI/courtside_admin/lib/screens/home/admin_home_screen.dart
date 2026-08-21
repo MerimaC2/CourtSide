@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/translations.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../widgets/language_toggle.dart';
 import '../auth/login_screen.dart';
 import '../courts/courts_screen.dart';
 import '../reports/reports_screen.dart';
@@ -18,12 +20,12 @@ class AdminHomeScreen extends StatefulWidget {
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   int _selectedIndex = 0;
 
-  static const _sections = [
-    _Section('Tereni', Icons.sports_tennis_outlined),
-    _Section('Raspored', Icons.calendar_month_outlined),
-    _Section('Rezervacije', Icons.event_note_outlined),
-    _Section('Izvještaji', Icons.picture_as_pdf_outlined),
-  ];
+  List<_Section> _sections(BuildContext context) => [
+        _Section(tr(context, 'Tereni'), Icons.sports_tennis_outlined),
+        _Section(tr(context, 'Raspored'), Icons.calendar_month_outlined),
+        _Section(tr(context, 'Rezervacije'), Icons.event_note_outlined),
+        _Section(tr(context, 'Izvještaji'), Icons.picture_as_pdf_outlined),
+      ];
 
   void _logout() {
     Authorization.clear();
@@ -41,12 +43,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
         actions: [
+          const LanguageToggle(),
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(left: 4, right: 8),
             child: Center(child: Text(Authorization.displayName)),
           ),
           IconButton(
-            tooltip: 'Odjava',
+            tooltip: tr(context, 'Odjava'),
             icon: const Icon(Icons.logout),
             onPressed: _logout,
           ),
@@ -58,7 +61,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             selectedIndex: _selectedIndex,
             onDestinationSelected: (i) => setState(() => _selectedIndex = i),
             labelType: NavigationRailLabelType.all,
-            destinations: _sections
+            destinations: _sections(context)
                 .map((s) => NavigationRailDestination(
                       icon: Icon(s.icon),
                       label: Text(s.label),
@@ -72,7 +75,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               children: [
                 const CourtsScreen(),
                 const ScheduleScreen(),
-                const ReservationsScreen(),
+                ReservationsScreen(isActive: _selectedIndex == 2),
                 const ReportsScreen(),
               ],
             ),

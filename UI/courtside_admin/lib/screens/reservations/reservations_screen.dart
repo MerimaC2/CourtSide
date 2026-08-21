@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
@@ -9,7 +10,14 @@ import 'reservation_detail_dialog.dart';
 const _statuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed'];
 
 class ReservationsScreen extends StatefulWidget {
-  const ReservationsScreen({super.key});
+  /// Whether this screen is the currently selected tab. The admin shell keeps
+  /// all tabs alive in an IndexedStack, so this is how we detect "the user
+  /// switched back to Rezervacije" and reload — otherwise the list only ever
+  /// loads once and goes stale (e.g. a reservation made on mobile wouldn't
+  /// show up until a manual search).
+  final bool isActive;
+
+  const ReservationsScreen({super.key, this.isActive = true});
 
   @override
   State<ReservationsScreen> createState() => _ReservationsScreenState();
@@ -28,6 +36,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReservationsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _load();
   }
 
   @override
@@ -57,7 +71,10 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       setState(() => _reservations = result.result
         ..sort((a, b) => b.date.compareTo(a.date)));
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -126,7 +143,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Pretraga (broj, klijent)...',
+              hintText: tr(context, 'Pretraga (broj, klijent)...'),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _load),
             ),
@@ -139,8 +156,9 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             initialValue: _status,
             decoration: const InputDecoration(labelText: 'Status'),
             items: [
-              const DropdownMenuItem<String?>(value: null, child: Text('Svi statusi')),
-              ..._statuses.map((s) => DropdownMenuItem<String?>(value: s, child: Text(s))),
+              DropdownMenuItem<String?>(value: null, child: Text(tr(context, 'Svi statusi'))),
+              ..._statuses.map((s) => DropdownMenuItem<String?>(
+                  value: s, child: Text(translateReservationStatus(context, s)))),
             ],
             onChanged: (v) {
               setState(() => _status = v);
@@ -151,14 +169,18 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         OutlinedButton.icon(
           onPressed: () => _pickDate(from: true),
           icon: const Icon(Icons.calendar_today_outlined, size: 16),
-          label: Text(_dateFrom == null ? 'Od datuma' : formatDisplayDate(formatApiDate(_dateFrom!))),
+          label: Text(_dateFrom == null
+              ? tr(context, 'Od datuma')
+              : formatDisplayDate(formatApiDate(_dateFrom!))),
         ),
         OutlinedButton.icon(
           onPressed: () => _pickDate(from: false),
           icon: const Icon(Icons.calendar_today_outlined, size: 16),
-          label: Text(_dateTo == null ? 'Do datuma' : formatDisplayDate(formatApiDate(_dateTo!))),
+          label: Text(_dateTo == null
+              ? tr(context, 'Do datuma')
+              : formatDisplayDate(formatApiDate(_dateTo!))),
         ),
-        TextButton(onPressed: _clearFilters, child: const Text('Očisti filtere')),
+        TextButton(onPressed: _clearFilters, child: Text(tr(context, 'Očisti filtere'))),
       ],
     );
   }
@@ -174,40 +196,44 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             const SizedBox(height: 12),
             Text(_error!),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _load, child: const Text('Pokušaj ponovo')),
+            ElevatedButton(onPressed: _load, child: Text(tr(context, 'Pokušaj ponovo'))),
           ],
         ),
       );
     }
     if (_reservations.isEmpty) {
-      return const Center(child: Text('Nema rezervacija za zadane filtere.'));
+      return Center(child: Text(tr(context, 'Nema rezervacija za zadane filtere.')));
     }
     return SingleChildScrollView(
       child: DataTable(
-        columns: const [
-          DataColumn(label: Text('Broj')),
-          DataColumn(label: Text('Klijent')),
-          DataColumn(label: Text('Teren')),
-          DataColumn(label: Text('Datum')),
-          DataColumn(label: Text('Termin')),
-          DataColumn(label: Text('Iznos')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Plaćanje')),
-          DataColumn(label: Text('')),
+        columns: [
+          DataColumn(label: Text(tr(context, 'Broj'))),
+          DataColumn(label: Text(tr(context, 'Klijent'))),
+          DataColumn(label: Text(tr(context, 'Teren'))),
+          DataColumn(label: Text(tr(context, 'Datum'))),
+          DataColumn(label: Text(tr(context, 'Termin'))),
+          DataColumn(label: Text(tr(context, 'Iznos'))),
+          const DataColumn(label: Text('Status')),
+          DataColumn(label: Text(tr(context, 'Plaćanje'))),
+          const DataColumn(label: Text('')),
         ],
         rows: _reservations.map((r) {
           return DataRow(cells: [
-            DataCell(Text(r.reservationNumber)),
+            DataCell(Tooltip(
+              message: r.reservationNumber,
+              child: Text(shortReservationNumber(r.reservationNumber)),
+            )),
             DataCell(Text(r.clientName ?? '-')),
             DataCell(Text(r.courtName ?? '-')),
             DataCell(Text(formatDisplayDate(r.date))),
             DataCell(Text(r.timeRange)),
             DataCell(Text(formatPrice(r.totalPrice))),
-            DataCell(_statusChip(r.status)),
-            DataCell(Text(r.paymentStatus ?? '-')),
+            DataCell(_statusChip(context, r.status)),
+            DataCell(Text(
+                r.paymentStatus != null ? translatePaymentStatus(context, r.paymentStatus!) : '-')),
             DataCell(
               IconButton(
-                tooltip: 'Detalji',
+                tooltip: tr(context, 'Detalji'),
                 icon: const Icon(Icons.visibility_outlined, size: 20),
                 onPressed: () => _openDetail(r),
               ),
@@ -218,7 +244,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     );
   }
 
-  Widget _statusChip(String status) {
+  Widget _statusChip(BuildContext context, String status) {
     final color = switch (status) {
       'Confirmed' => kPrimaryColor,
       'Pending' => Colors.orange,
@@ -232,7 +258,8 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(status, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      child: Text(translateReservationStatus(context, status),
+          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
     );
   }
 }
