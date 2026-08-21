@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
 import '../../utils/util.dart';
 
@@ -13,7 +14,7 @@ class BookingConfirmationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Potvrda rezervacije'),
+        title: Text(tr(context, 'Potvrda rezervacije')),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
@@ -25,9 +26,9 @@ class BookingConfirmationScreen extends StatelessWidget {
           children: [
             Icon(Icons.check_circle, color: kPrimaryColor, size: 72),
             const SizedBox(height: 16),
-            const Text('Rezervacija je uspješno kreirana!',
+            Text(tr(context, 'Rezervacija je uspješno kreirana!'),
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(reservation.reservationNumber,
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
@@ -42,13 +43,14 @@ class BookingConfirmationScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _row('Teren', reservation.courtName ?? '-'),
-                    _row('Datum', formatDisplayDate(reservation.date)),
-                    _row('Termin', reservation.timeRange),
-                    _row('Iznos', formatPrice(reservation.totalPrice)),
+                    _row(context, 'Teren', reservation.courtName ?? '-'),
+                    _row(context, 'Datum', formatDisplayDate(reservation.date)),
+                    _row(context, 'Termin', reservation.timeRange),
+                    _row(context, 'Iznos', formatPrice(reservation.totalPrice)),
                     _row(
+                      context,
                       'Plaćanje',
-                      paid ? 'Plaćeno online' : 'Plaćanje pri dolasku (gotovina)',
+                      trMessage(context, paid ? 'Plaćeno online' : 'Plaćanje pri dolasku (gotovina)'),
                     ),
                   ],
                 ),
@@ -60,7 +62,7 @@ class BookingConfirmationScreen extends StatelessWidget {
               height: 50,
               child: ElevatedButton(
                 onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
-                child: const Text('Nazad na terene'),
+                child: Text(tr(context, 'Nazad na terene')),
               ),
             ),
           ],
@@ -69,13 +71,13 @@ class BookingConfirmationScreen extends StatelessWidget {
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600)),
+          Text(tr(context, label), style: TextStyle(color: Colors.grey.shade600)),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),

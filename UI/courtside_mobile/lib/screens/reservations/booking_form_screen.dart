@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/availability_slot.dart';
 import '../../models/court.dart';
 import '../../models/reservation.dart';
@@ -84,8 +85,9 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
       _goToConfirmation(reservation, paid: true);
     } on StripeException catch (e) {
       if (mounted) {
+        final detail = e.error.localizedMessage ?? e.error.code;
         showError(context,
-            'Plaćanje nije završeno (${e.error.localizedMessage ?? e.error.code}). Rezervacija je kreirana kao neplaćena.');
+            '${trMessage(context, 'Plaćanje nije završeno')} ($detail). ${trMessage(context, 'Rezervacija je kreirana kao neplaćena.')}');
       }
     } catch (e) {
       if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
@@ -120,7 +122,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Forma za rezervaciju'),
+        title: Text(tr(context, 'Forma za rezervaciju')),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
       ),
@@ -133,39 +135,41 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
             children: [
               _summaryCard(),
               const SizedBox(height: 20),
-              const Text('Podaci za rezervaciju',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(tr(context, 'Podaci za rezervaciju'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Ime i prezime',
-                  prefixIcon: Icon(Icons.person_outline),
+                decoration: InputDecoration(
+                  labelText: tr(context, 'Ime i prezime'),
+                  prefixIcon: const Icon(Icons.person_outline),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Unesite ime i prezime' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite ime i prezime') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Broj telefona',
-                  prefixIcon: Icon(Icons.phone_outlined),
+                decoration: InputDecoration(
+                  labelText: tr(context, 'Broj telefona'),
+                  prefixIcon: const Icon(Icons.phone_outlined),
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Unesite broj telefona' : null,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite broj telefona') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _noteController,
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Napomena (opciono)',
-                  prefixIcon: Icon(Icons.note_outlined),
+                decoration: InputDecoration(
+                  labelText: tr(context, 'Napomena (opciono)'),
+                  prefixIcon: const Icon(Icons.note_outlined),
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('Način plaćanja',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(tr(context, 'Način plaćanja'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               _paymentOption('Cash', Icons.payments_outlined, 'Gotovina pri dolasku'),
               _paymentOption('Stripe', Icons.credit_card, 'Online plaćanje karticom'),
@@ -175,7 +179,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
                 height: 50,
                 child: _submitting
                     ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton(onPressed: _submit, child: const Text('Rezerviši')),
+                    : ElevatedButton(onPressed: _submit, child: Text(tr(context, 'Rezerviši'))),
               ),
             ],
           ),
@@ -211,7 +215,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(color: Colors.grey.shade600)),
+          Text(tr(context, label), style: TextStyle(color: Colors.grey.shade600)),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
       ),
@@ -236,7 +240,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
             children: [
               Icon(icon, color: selected ? kPrimaryColor : Colors.grey.shade600),
               const SizedBox(width: 12),
-              Expanded(child: Text(label)),
+              Expanded(child: Text(tr(context, label))),
               Icon(
                 selected ? Icons.check_circle : Icons.radio_button_unchecked,
                 color: selected ? kPrimaryColor : Colors.grey.shade400,

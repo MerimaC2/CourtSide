@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
@@ -44,7 +45,10 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
       if (!mounted) return;
       setState(() => _reservations = result.result);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -67,17 +71,17 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Otkazivanje rezervacije'),
+        title: Text(tr(ctx, 'Otkazivanje rezervacije')),
         content: TextField(
           controller: reasonController,
-          decoration: const InputDecoration(labelText: 'Razlog otkazivanja'),
+          decoration: InputDecoration(labelText: tr(ctx, 'Razlog otkazivanja')),
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Nazad')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(tr(ctx, 'Nazad'))),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(reasonController.text.trim()),
-            child: const Text('Otkaži rezervaciju'),
+            child: Text(tr(ctx, 'Otkaži rezervaciju')),
           ),
         ],
       ),
@@ -98,13 +102,13 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Moje rezervacije'),
+        title: Text(tr(context, 'Moje rezervacije')),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
-          tabs: const [Tab(text: 'Aktivne'), Tab(text: 'Historija')],
+          tabs: [Tab(text: tr(context, 'Aktivne')), Tab(text: tr(context, 'Historija'))],
         ),
       ),
       body: _loading
@@ -135,7 +139,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            ElevatedButton(onPressed: _load, child: const Text('Pokušaj ponovo')),
+            ElevatedButton(onPressed: _load, child: Text(tr(context, 'Pokušaj ponovo'))),
           ],
         ),
       ),
@@ -145,9 +149,9 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
   Widget _buildList(List<Reservation> items, {required bool canCancelSection}) {
     if (items.isEmpty) {
       return ListView(
-        children: const [
-          SizedBox(height: 80),
-          Center(child: Text('Nema rezervacija.')),
+        children: [
+          const SizedBox(height: 80),
+          Center(child: Text(tr(context, 'Nema rezervacija.'))),
         ],
       );
     }
@@ -177,7 +181,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
                   child: Text(r.courtName ?? '-',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
-                _statusBadge(r.status),
+                _statusBadge(context, r.status),
               ],
             ),
             if (r.sportCenterName != null && r.sportCenterName!.isNotEmpty)
@@ -205,10 +209,10 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
                     ? TextButton.icon(
                         onPressed: () => _cancel(r),
                         icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
-                        label: const Text('Otkaži', style: TextStyle(color: Colors.red)),
+                        label: Text(tr(context, 'Otkaži'), style: const TextStyle(color: Colors.red)),
                       )
                     : Text(
-                        'Otkazivanje nije moguće manje od 24h prije termina.',
+                        tr(context, 'Otkazivanje nije moguće manje od 24h prije termina.'),
                         style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                       ),
               ),
@@ -219,7 +223,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
     );
   }
 
-  Widget _statusBadge(String status) {
+  Widget _statusBadge(BuildContext context, String status) {
     final Color color = switch (status) {
       'Confirmed' => kPrimaryColor,
       'Pending' => Colors.orange,
@@ -233,7 +237,8 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(status, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      child: Text(translateReservationStatus(context, status),
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }

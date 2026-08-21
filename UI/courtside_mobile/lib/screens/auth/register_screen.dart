@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/util.dart';
 import '../courts/courts_list_screen.dart';
@@ -63,7 +64,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F2),
       appBar: AppBar(
-        title: const Text('Registracija'),
+        title: Text(tr(context, 'Registracija')),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
       ),
@@ -80,18 +81,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Expanded(
                       child: TextFormField(
                         controller: _firstNameController,
-                        decoration: const InputDecoration(labelText: 'Ime'),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Unesite ime' : null,
+                        decoration: InputDecoration(labelText: tr(context, 'Ime')),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? tr(context, 'Unesite ime')
+                            : null,
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextFormField(
                         controller: _lastNameController,
-                        decoration: const InputDecoration(labelText: 'Prezime'),
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Unesite prezime' : null,
+                        decoration: InputDecoration(labelText: tr(context, 'Prezime')),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? tr(context, 'Unesite prezime')
+                            : null,
                       ),
                     ),
                   ],
@@ -99,12 +102,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Korisničko ime',
-                    prefixIcon: Icon(Icons.person_outline),
+                  decoration: InputDecoration(
+                    labelText: tr(context, 'Korisničko ime'),
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Unesite korisničko ime' : null,
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? tr(context, 'Unesite korisničko ime')
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -114,15 +118,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (v) => (v == null || !v.contains('@')) ? 'Unesite ispravan email' : null,
+                  validator: (v) =>
+                      (v == null || !v.contains('@')) ? tr(context, 'Unesite ispravan email') : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Broj telefona',
-                    prefixIcon: Icon(Icons.phone_outlined),
+                  decoration: InputDecoration(
+                    labelText: tr(context, 'Broj telefona'),
+                    prefixIcon: const Icon(Icons.phone_outlined),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -130,21 +135,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _passwordController,
                   obscureText: _obscure,
                   decoration: InputDecoration(
-                    labelText: 'Lozinka',
+                    labelText: tr(context, 'Lozinka'),
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
-                  validator: (v) => (v == null || v.length < 6) ? 'Lozinka mora imati bar 6 znakova' : null,
+                  validator: (v) => (v == null || v.length < 6)
+                      ? tr(context, 'Lozinka mora imati bar 6 znakova')
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 SizedBox(
                   height: 50,
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton(onPressed: _register, child: const Text('Registruj se')),
+                      : ElevatedButton(
+                          onPressed: _register, child: Text(tr(context, 'Registruj se'))),
                 ),
               ],
             ),

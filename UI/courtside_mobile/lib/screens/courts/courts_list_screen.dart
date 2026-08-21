@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/city.dart';
 import '../../models/court.dart';
 import '../../models/recommendation.dart';
@@ -11,6 +12,7 @@ import '../../providers/recommendation_provider.dart';
 import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../widgets/language_toggle.dart';
 import '../auth/login_screen.dart';
 import '../reservations/my_reservations_screen.dart';
 import 'court_details_screen.dart';
@@ -91,7 +93,8 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       setState(() => _courts = result.result);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -110,19 +113,20 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tereni'),
+        title: Text(tr(context, 'Tereni')),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
         actions: [
+          const LanguageToggle(),
           IconButton(
-            tooltip: 'Moje rezervacije',
+            tooltip: tr(context, 'Moje rezervacije'),
             icon: const Icon(Icons.event_note_outlined),
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MyReservationsScreen()),
             ),
           ),
           IconButton(
-            tooltip: 'Odjava',
+            tooltip: tr(context, 'Odjava'),
             icon: const Icon(Icons.logout),
             onPressed: _logout,
           ),
@@ -142,10 +146,10 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Text('Preporučeno za tebe',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Text(tr(context, 'Preporučeno za tebe'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         ),
         SizedBox(
           height: 128,
@@ -235,7 +239,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Pretraga terena...',
+              hintText: tr(context, 'Pretraga terena...'),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.arrow_forward),
@@ -252,10 +256,11 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
                 child: DropdownButtonFormField<int?>(
                   initialValue: _sportId,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Sport', contentPadding: EdgeInsets.symmetric(horizontal: 12)),
+                  decoration: InputDecoration(
+                      labelText: tr(context, 'Sport'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12)),
                   items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('Svi sportovi')),
+                    DropdownMenuItem<int?>(value: null, child: Text(tr(context, 'Svi sportovi'))),
                     ..._sports.map((s) =>
                         DropdownMenuItem<int?>(value: s.id, child: Text(s.name))),
                   ],
@@ -270,10 +275,11 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
                 child: DropdownButtonFormField<int?>(
                   initialValue: _cityId,
                   isExpanded: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Grad', contentPadding: EdgeInsets.symmetric(horizontal: 12)),
+                  decoration: InputDecoration(
+                      labelText: tr(context, 'Grad'),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12)),
                   items: [
-                    const DropdownMenuItem<int?>(value: null, child: Text('Svi gradovi')),
+                    DropdownMenuItem<int?>(value: null, child: Text(tr(context, 'Svi gradovi'))),
                     ..._cities.map((c) =>
                         DropdownMenuItem<int?>(value: c.id, child: Text(c.name))),
                   ],
@@ -303,14 +309,14 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _loadCourts, child: const Text('Pokušaj ponovo')),
+              ElevatedButton(onPressed: _loadCourts, child: Text(tr(context, 'Pokušaj ponovo'))),
             ],
           ),
         ),
       );
     }
     if (_courts.isEmpty) {
-      return const Center(child: Text('Nema terena za zadane filtere.'));
+      return Center(child: Text(tr(context, 'Nema terena za zadane filtere.')));
     }
     return RefreshIndicator(
       onRefresh: _loadCourts,

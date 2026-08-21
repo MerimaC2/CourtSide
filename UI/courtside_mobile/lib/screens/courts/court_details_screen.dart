@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../providers/court_provider.dart';
 import '../../utils/util.dart';
@@ -65,12 +66,13 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
             _infoRow(
               Icons.circle,
               'Status',
-              court.isActive ? 'Aktivan' : 'Neaktivan',
+              tr(context, court.isActive ? 'Aktivan' : 'Neaktivan'),
               iconColor: court.isActive ? kPrimaryColor : Colors.grey,
             ),
             if (court.description != null && court.description!.isNotEmpty) ...[
               const SizedBox(height: 16),
-              const Text('Opis', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              Text(tr(context, 'Opis'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               Text(court.description!, style: TextStyle(color: Colors.grey.shade800)),
             ],
@@ -80,7 +82,7 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
               height: 50,
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.calendar_month_outlined),
-                label: const Text('Provjeri dostupnost'),
+                label: Text(tr(context, 'Provjeri dostupnost')),
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => AvailabilityScreen(court: court)),
                 ),
@@ -99,7 +101,7 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
         children: [
           Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade600),
           const SizedBox(width: 10),
-          Text('$label: ', style: TextStyle(color: Colors.grey.shade700)),
+          Text('${tr(context, label)}: ', style: TextStyle(color: Colors.grey.shade700)),
           Expanded(
             child: Text(value,
                 style: const TextStyle(fontWeight: FontWeight.w600),

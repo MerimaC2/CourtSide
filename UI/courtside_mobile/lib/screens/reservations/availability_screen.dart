@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../l10n/translations.dart';
 import '../../models/availability_slot.dart';
 import '../../models/court.dart';
 import '../../providers/availability_provider.dart';
@@ -39,7 +40,10 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
       if (!mounted) return;
       setState(() => _slots = slots);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) {
+        final message = e.toString().replaceFirst('Exception: ', '');
+        setState(() => _error = trMessage(context, message));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -73,7 +77,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Dostupnost — ${widget.court.name}'),
+        title: Text('${tr(context, 'Dostupnost —')} ${widget.court.name}'),
         backgroundColor: kPrimaryColor,
         foregroundColor: Colors.white,
       ),
@@ -128,14 +132,14 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _loadSlots, child: const Text('Pokušaj ponovo')),
+              ElevatedButton(onPressed: _loadSlots, child: Text(tr(context, 'Pokušaj ponovo'))),
             ],
           ),
         ),
       );
     }
     if (_slots.isEmpty) {
-      return const Center(child: Text('Nema definisanih termina za odabrani datum.'));
+      return Center(child: Text(tr(context, 'Nema definisanih termina za odabrani datum.')));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -178,12 +182,23 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
       children: [
         Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        Text(tr(context, label), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
       ],
     );
   }
 
+  bool _isPastOrCurrentHour(AvailabilitySlot slot) {
+    final now = DateTime.now();
+    final isToday = _selectedDate.year == now.year &&
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
+    if (!isToday) return false;
+    final slotHour = int.tryParse(slot.startTime.split(':').first) ?? 0;
+    return slotHour <= now.hour;
+  }
+
   Widget _slotTile(AvailabilitySlot slot) {
+    final available = slot.isAvailable && !_isPastOrCurrentHour(slot);
     final Color color;
     switch (slot.status) {
       case 'Available':
@@ -196,20 +211,20 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
         color = Colors.grey;
     }
     return InkWell(
-      onTap: slot.isAvailable ? () => _selectSlot(slot) : null,
+      onTap: available ? () => _selectSlot(slot) : null,
       borderRadius: BorderRadius.circular(10),
       child: Container(
         decoration: BoxDecoration(
-          color: slot.isAvailable ? color.withValues(alpha: 0.1) : Colors.grey.shade100,
+          color: available ? color.withValues(alpha: 0.1) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: slot.isAvailable ? color : Colors.grey.shade300),
+          border: Border.all(color: available ? color : Colors.grey.shade300),
         ),
         alignment: Alignment.center,
         child: Text(
           slot.label,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: slot.isAvailable ? color : Colors.grey.shade500,
+            color: available ? color : Colors.grey.shade500,
           ),
         ),
       ),
