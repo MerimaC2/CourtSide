@@ -43,7 +43,31 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
     }
   }
 
+  /// Asks the user to confirm an irreversible action before it runs.
+  Future<bool> _confirmAction(String question) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr(ctx, 'Potvrda')),
+        content: Text(tr(ctx, question)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(tr(ctx, 'Odustani')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(tr(ctx, 'Potvrdi')),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _payCash() async {
+    if (!await _confirmAction('Označiti gotovinsku uplatu kao naplaćenu?')) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       final payment = await context.read<PaymentProvider>().payCash(_reservation.id);
@@ -58,6 +82,8 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
   }
 
   Future<void> _refund() async {
+    if (!await _confirmAction('Pokrenuti povrat sredstava za ovu rezervaciju?')) return;
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       final payment = await context.read<PaymentProvider>().refund(_reservation.id);
