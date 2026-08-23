@@ -25,7 +25,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   int? _sportCenterId;
   DateTime? _dateFrom;
   DateTime? _dateTo;
-  bool _generating = false;
+  /// Which report is downloading right now (null = none). Only that card shows the
+  /// spinner; the other button is disabled until the download finishes.
+  String? _busyReport;
 
   @override
   void initState() {
@@ -65,7 +67,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
   /// Downloads one of the two reports; [occupancy] picks which. Both share the
   /// same period/centre filters and the currently selected UI language.
   Future<void> _generate({bool occupancy = false}) async {
-    setState(() => _generating = true);
+    setState(() => _busyReport = occupancy ? 'occupancy' : 'reservations');
     final reportProvider = context.read<ReportProvider>();
     final language = context.read<LocaleProvider>().language == AppLanguage.en ? 'en' : 'bs';
     try {
@@ -109,7 +111,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     } catch (e) {
       if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _generating = false);
+      if (mounted) setState(() => _busyReport = null);
     }
   }
 
@@ -188,6 +190,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: tr(context, 'Izvještaj o rezervacijama'),
             description: tr(context,
                 'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.'),
+            busy: _busyReport == 'reservations',
             onGenerate: () => _generate(),
           ),
           const SizedBox(height: 12),
@@ -195,6 +198,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
             title: tr(context, 'Popunjenost terena'),
             description: tr(context,
                 'Najtraženiji termini i popunjenost svakog terena u odnosu na radno vrijeme.'),
+            busy: _busyReport == 'occupancy',
             onGenerate: () => _generate(occupancy: true),
           ),
         ],
@@ -203,9 +207,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   /// One downloadable report: name, what it contains and its download button.
+  /// [busy] marks the report currently downloading — only that card spins, while
+  /// the other's button stays visible but disabled until the download finishes.
   Widget _reportCard({
     required String title,
     required String description,
+    required bool busy,
     required VoidCallback onGenerate,
   }) {
     return Card(
@@ -234,10 +241,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             SizedBox(
               width: 190,
               height: 44,
-              child: _generating
+              child: busy
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton.icon(
-                      onPressed: onGenerate,
+                      onPressed: _busyReport == null ? onGenerate : null,
                       icon: const Icon(Icons.download_outlined, size: 18),
                       label: Text(tr(context, 'Preuzmi PDF')),
                     ),
