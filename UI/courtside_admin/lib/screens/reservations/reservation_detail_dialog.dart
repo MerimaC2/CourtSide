@@ -150,9 +150,20 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
   Widget build(BuildContext context) {
     final r = _reservation;
     return AlertDialog(
-      title: Tooltip(
-        message: r.reservationNumber,
-        child: Text(shortReservationNumber(r.reservationNumber)),
+      title: Row(
+        children: [
+          Expanded(
+            child: Tooltip(
+              message: r.reservationNumber,
+              child: Text(shortReservationNumber(r.reservationNumber)),
+            ),
+          ),
+          IconButton(
+            tooltip: tr(context, 'Zatvori'),
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(true),
+          ),
+        ],
       ),
       content: SizedBox(
         width: 420,
