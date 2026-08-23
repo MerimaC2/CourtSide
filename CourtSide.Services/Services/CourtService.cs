@@ -33,6 +33,14 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
         query.Include(x => x.Sport).Include(x => x.SportCenter).Include(x => x.Images)
              .Include(x => x.Reviews).Include(x => x.WorkingHours);
 
+    /// <summary>A court with reservation history stays (deactivate it instead), so past bookings keep their data.</summary>
+    public override async Task DeleteAsync(int id)
+    {
+        if (await Context.Reservations.AnyAsync(r => r.CourtId == id))
+            throw new BusinessException("Teren se ne može obrisati jer ima rezervacije. Umjesto brisanja označite ga kao neaktivan.");
+        await base.DeleteAsync(id);
+    }
+
     protected override Task BeforeInsertAsync(CourtUpsertDto dto, Court entity)
     {
         ApplyWorkingHours(dto, entity);

@@ -1,5 +1,6 @@
 using CourtSide.Core.Dto;
 using CourtSide.Core.Entities;
+using CourtSide.Core.Exceptions;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Infrastructure;
 using CourtSide.Services.Common;
@@ -13,6 +14,14 @@ public interface ICityService : ICrudService<CityDto, CityUpsertDto, CitySearchO
 public class CityService : BaseCrudService<City, CityDto, CityUpsertDto, CitySearchObject>, ICityService
 {
     public CityService(DatabaseContext context, IMapper mapper) : base(context, mapper) { }
+
+    /// <summary>Reference data in use must not disappear from under the records that point at it.</summary>
+    public override async Task DeleteAsync(int id)
+    {
+        if (await Context.SportCenters.AnyAsync(s => s.CityId == id))
+            throw new BusinessException("Grad se ne može obrisati jer postoje sportski centri koji ga koriste.");
+        await base.DeleteAsync(id);
+    }
 
     protected override IQueryable<City> Include(IQueryable<City> query) => query.Include(x => x.Country);
 
