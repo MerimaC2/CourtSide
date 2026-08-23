@@ -28,6 +28,9 @@ const Map<String, String> _dict = {
   'Ovaj nalog nema administratorska prava.': 'This account does not have administrator privileges.',
 
   // Courts
+  'Recenzije': 'Reviews',
+  'Prosječna ocjena': 'Average rating',
+  'Još nema recenzija za ovaj teren.': 'No reviews for this court yet.',
   'Pretraga terena...': 'Search courts...',
   'Dodaj teren': 'Add court',
   'Pokušaj ponovo': 'Try again',

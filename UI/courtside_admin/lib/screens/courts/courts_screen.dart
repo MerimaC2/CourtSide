@@ -12,6 +12,7 @@ import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import 'court_form_dialog.dart';
+import 'court_reviews_dialog.dart';
 
 class CourtsScreen extends StatefulWidget {
   /// Whether this is the currently selected section. The admin shell keeps every
@@ -232,6 +233,14 @@ class _CourtsScreenState extends State<CourtsScreen> {
             DataCell(Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                IconButton(
+                  tooltip: tr(context, 'Recenzije'),
+                  icon: const Icon(Icons.star_border, size: 20),
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => CourtReviewsDialog(court: court),
+                  ),
+                ),
                 IconButton(
                   tooltip: tr(context, 'Uredi'),
                   icon: const Icon(Icons.edit_outlined, size: 20),

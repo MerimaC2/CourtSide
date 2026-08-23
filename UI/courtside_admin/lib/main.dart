@@ -7,6 +7,7 @@ import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
 import 'providers/country_provider.dart';
 import 'providers/court_provider.dart';
+import 'providers/court_review_provider.dart';
 import 'providers/news_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/report_provider.dart';
@@ -34,6 +35,7 @@ void main() async {
         ChangeNotifierProvider.value(value: localeProvider),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CourtProvider()),
+        ChangeNotifierProvider(create: (_) => CourtReviewProvider()),
         ChangeNotifierProvider(create: (_) => SportProvider()),
         ChangeNotifierProvider(create: (_) => CountryProvider()),
         ChangeNotifierProvider(create: (_) => CityProvider()),
