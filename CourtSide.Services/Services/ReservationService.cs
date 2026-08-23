@@ -135,12 +135,17 @@ public class ReservationService : IReservationService
             }
         };
 
-        _db.Reservations.Add(reservation);
-        await _db.SaveChangesAsync();
+        // The reservation and its notification are separate saves, so they share one transaction.
+        await using (var transaction = await _db.Database.BeginTransactionAsync())
+        {
+            _db.Reservations.Add(reservation);
+            await _db.SaveChangesAsync();
 
-        await _notifications.CreateAsync(userId, NotificationType.ReservationCreated,
-            "Rezervacija kreirana",
-            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je kreirana i čeka potvrdu.");
+            await _notifications.CreateAsync(userId, NotificationType.ReservationCreated,
+                "Rezervacija kreirana",
+                $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je kreirana i čeka potvrdu.");
+            await transaction.CommitAsync();
+        }
         await SendEmailAsync(userId, "Potvrda kreiranja rezervacije",
             $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je kreirana i čeka potvrdu.");
 
@@ -158,11 +163,17 @@ public class ReservationService : IReservationService
         reservation.ConfirmedAt = DateTime.UtcNow;
         reservation.ConfirmedById = _currentUser.UserId;
         reservation.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
 
-        await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationConfirmed,
-            "Rezervacija potvrđena",
-            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je potvrđena.");
+        // The status change and its notification are separate saves, so they share one transaction.
+        await using (var transaction = await _db.Database.BeginTransactionAsync())
+        {
+            await _db.SaveChangesAsync();
+
+            await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationConfirmed,
+                "Rezervacija potvrđena",
+                $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je potvrđena.");
+            await transaction.CommitAsync();
+        }
         await SendEmailAsync(reservation.ClientId, "Rezervacija potvrđena",
             $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je potvrđena.");
 
@@ -193,7 +204,19 @@ public class ReservationService : IReservationService
         reservation.CancelledById = _currentUser.UserId;
         reservation.CancellationReason = dto.Reason;
         reservation.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+
+        // The status change and its notification are separate saves, so they share one transaction.
+        // The refund stays outside it — it talks to Stripe over the network and must not hold the
+        // transaction open, and its failure must not undo the cancellation.
+        await using (var transaction = await _db.Database.BeginTransactionAsync())
+        {
+            await _db.SaveChangesAsync();
+
+            await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
+                "Rezervacija otkazana",
+                $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {dto.Reason}");
+            await transaction.CommitAsync();
+        }
 
         // Refund any completed payment (Stripe online or cash). A refund failure must not block cancellation.
         try
@@ -206,9 +229,6 @@ public class ReservationService : IReservationService
                 reservation.ReservationNumber);
         }
 
-        await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
-            "Rezervacija otkazana",
-            $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {dto.Reason}");
         await SendEmailAsync(reservation.ClientId, "Rezervacija otkazana",
             $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {dto.Reason}");
 

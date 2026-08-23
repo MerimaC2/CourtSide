@@ -6,7 +6,7 @@ public class BaseSearchObject
     public const int MaxPageSize = 100;
 
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
+    public int PageSize { get; set; } = 10;
 
     /// <summary>Free-text filter (matched against the entity's main text field).</summary>
     public string? SearchTerm { get; set; }
