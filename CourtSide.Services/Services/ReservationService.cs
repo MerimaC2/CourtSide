@@ -3,6 +3,7 @@ using CourtSide.Core.Dto.Base;
 using CourtSide.Core.Entities;
 using CourtSide.Core.Enumerations;
 using CourtSide.Core.Exceptions;
+using CourtSide.Core.Helpers;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Core.StateMachines;
 using CourtSide.Infrastructure;
@@ -24,6 +25,7 @@ public interface IReservationService
     Task<ReservationDto> CreateAsync(ReservationCreateDto dto);
     Task<ReservationDto> ConfirmAsync(int id);
     Task<ReservationDto> CancelAsync(int id, ReservationCancelDto dto);
+    Task<int> CompletePastDueAsync(CancellationToken cancellationToken = default);
 }
 
 public class ReservationService : IReservationService
@@ -84,7 +86,7 @@ public class ReservationService : IReservationService
             throw new BusinessException("Vrijeme završetka mora biti nakon vremena početka.");
 
         var startMoment = dto.Date.ToDateTime(dto.StartTime);
-        if (startMoment <= DateTime.Now)
+        if (startMoment <= DateTime.UtcNow)
             throw new BusinessException("Termin rezervacije mora biti u budućnosti.");
 
         var workingHours = court.WorkingHours.FirstOrDefault(w => w.DayOfWeek == dto.Date.DayOfWeek);
@@ -111,7 +113,7 @@ public class ReservationService : IReservationService
 
         var reservation = new Reservation
         {
-            ReservationNumber = GenerateNumber(),
+            ReservationNumber = ReservationNumber.Generate(),
             ClientId = userId,
             CourtId = dto.CourtId,
             Date = dto.Date,
@@ -138,9 +140,9 @@ public class ReservationService : IReservationService
 
         await _notifications.CreateAsync(userId, NotificationType.ReservationCreated,
             "Rezervacija kreirana",
-            $"Vaša rezervacija {reservation.ReservationNumber} je kreirana i čeka potvrdu.");
+            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je kreirana i čeka potvrdu.");
         await SendEmailAsync(userId, "Potvrda kreiranja rezervacije",
-            $"Vaša rezervacija {reservation.ReservationNumber} je kreirana i čeka potvrdu.");
+            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je kreirana i čeka potvrdu.");
 
         return await GetByIdAsync(reservation.Id);
     }
@@ -160,9 +162,9 @@ public class ReservationService : IReservationService
 
         await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationConfirmed,
             "Rezervacija potvrđena",
-            $"Vaša rezervacija {reservation.ReservationNumber} je potvrđena.");
+            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je potvrđena.");
         await SendEmailAsync(reservation.ClientId, "Rezervacija potvrđena",
-            $"Vaša rezervacija {reservation.ReservationNumber} je potvrđena.");
+            $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je potvrđena.");
 
         return await GetByIdAsync(reservation.Id);
     }
@@ -183,7 +185,7 @@ public class ReservationService : IReservationService
 
         // Clients can cancel up to 24h before the start; admins may cancel anytime.
         var startMoment = reservation.Date.ToDateTime(reservation.StartTime);
-        if (!_currentUser.IsAdmin && startMoment - DateTime.Now < TimeSpan.FromHours(24))
+        if (!_currentUser.IsAdmin && startMoment - DateTime.UtcNow < TimeSpan.FromHours(24))
             throw new BusinessException("Rezervaciju je moguće otkazati najkasnije 24 sata prije termina.");
 
         reservation.Status = ReservationStatus.Cancelled;
@@ -206,11 +208,55 @@ public class ReservationService : IReservationService
 
         await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
             "Rezervacija otkazana",
-            $"Rezervacija {reservation.ReservationNumber} je otkazana. Razlog: {dto.Reason}");
+            $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {dto.Reason}");
         await SendEmailAsync(reservation.ClientId, "Rezervacija otkazana",
-            $"Rezervacija {reservation.ReservationNumber} je otkazana. Razlog: {dto.Reason}");
+            $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {dto.Reason}");
 
         return await GetByIdAsync(reservation.Id);
+    }
+
+    /// <summary>
+    /// Moves confirmed reservations whose slot has already elapsed to <see cref="ReservationStatus.Completed"/>
+    /// and notifies the client. Driven by <c>ReservationCompletionService</c> rather than a user action,
+    /// since completion happens with the passage of time. Returns how many were completed.
+    /// </summary>
+    public async Task<int> CompletePastDueAsync(CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+        var timeOfDay = TimeOnly.FromDateTime(now);
+
+        // Date and time are compared separately so the filter runs in SQL instead of
+        // pulling every confirmed reservation into memory.
+        var pastDue = await _db.Reservations
+            .Where(r => r.Status == ReservationStatus.Confirmed &&
+                        (r.Date < today || (r.Date == today && r.EndTime <= timeOfDay)))
+            .ToListAsync(cancellationToken);
+
+        if (pastDue.Count == 0) return 0;
+
+        // The status updates and their notifications are saved separately, so they share
+        // one transaction and either all land or none do.
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
+
+        foreach (var reservation in pastDue)
+        {
+            ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Completed);
+            reservation.Status = ReservationStatus.Completed;
+            reservation.CompletedAt = now;
+            reservation.UpdatedAt = now;
+        }
+        await _db.SaveChangesAsync(cancellationToken);
+
+        foreach (var reservation in pastDue)
+        {
+            await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCompleted,
+                "Rezervacija završena",
+                $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je završena. Možete ocijeniti teren.");
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return pastDue.Count;
     }
 
     private async Task<PagedResult<ReservationDto>> QueryAsync(ReservationSearchObject search, IQueryable<Reservation> query)
@@ -251,7 +297,4 @@ public class ReservationService : IReservationService
 
     private int RequireUser() =>
         _currentUser.UserId ?? throw new BusinessException("Niste prijavljeni.");
-
-    private static string GenerateNumber() =>
-        $"RZ-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..4].ToUpperInvariant()}";
 }

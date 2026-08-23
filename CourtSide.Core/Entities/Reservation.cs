@@ -37,5 +37,10 @@ public class Reservation : BaseEntity
     public ApplicationUser? CancelledBy { get; set; }
     public string? CancellationReason { get; set; }
 
+    /// Set by the system once the booked slot has elapsed; there is no acting user,
+    /// unlike confirmation and cancellation.
+    public DateTime? CompletedAt { get; set; }
+
     public Payment? Payment { get; set; }
+    public ICollection<CourtReview> Reviews { get; set; } = new List<CourtReview>();
 }

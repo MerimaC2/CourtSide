@@ -30,6 +30,7 @@ public class ReservationDto
     public PaymentMethod? PaymentMethod { get; set; }
     public PaymentStatus? PaymentStatus { get; set; }
     public bool IsPaid { get; set; }
+    public bool HasReview { get; set; }
 }
 
 public class ReservationCreateDto
