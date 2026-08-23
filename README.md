@@ -38,7 +38,7 @@ UI/courtside_mobile       Flutter mobilna (korisnik)
 
 ### Desktop (administratorska aplikacija)
 - Prijava uz provjeru administratorske uloge
-- **Tereni** — CRUD, upload slike terena, pretraga
+- **Tereni** — CRUD, upload slike terena, pretraga, pregled recenzija sa prosječnom ocjenom
 - **Raspored** — pregled termina po terenu i danu, blokiranje/odblokiravanje termina
 - **Rezervacije** — pretraga i filteri (status, period), detalji, potvrda i otkazivanje,
   evidencija gotovinskog plaćanja i refund; lista se sama osvježava dok je otvorena
