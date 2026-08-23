@@ -2,6 +2,7 @@ using CourtSide.Core.Dto;
 using CourtSide.Core.Entities;
 using CourtSide.Core.Enumerations;
 using CourtSide.Core.Exceptions;
+using CourtSide.Core.Helpers;
 using CourtSide.Infrastructure;
 using CourtSide.Services.Services;
 using CourtSide.Shared.Models;
@@ -133,7 +134,7 @@ public class PaymentService : IPaymentService
 
         await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
             "Plaćanje evidentirano",
-            $"Gotovinsko plaćanje za rezervaciju {payment.Reservation.ReservationNumber} je evidentirano.");
+            $"Gotovinsko plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je evidentirano.");
 
         return ToDto(payment);
     }
@@ -169,7 +170,7 @@ public class PaymentService : IPaymentService
 
         await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentRefunded,
             "Povrat sredstava",
-            $"Izvršen je povrat za rezervaciju {payment.Reservation.ReservationNumber}.");
+            $"Izvršen je povrat za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)}.");
 
         return ToDto(payment);
     }
@@ -212,7 +213,7 @@ public class PaymentService : IPaymentService
                     await _db.SaveChangesAsync();
                     await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
                         "Plaćanje uspješno",
-                        $"Online plaćanje za rezervaciju {payment.Reservation.ReservationNumber} je zaprimljeno.");
+                        $"Online plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je zaprimljeno.");
                 }
                 break;
 

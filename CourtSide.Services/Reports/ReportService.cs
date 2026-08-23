@@ -1,4 +1,5 @@
 using CourtSide.Core.Enumerations;
+using CourtSide.Core.Helpers;
 using CourtSide.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -10,28 +11,24 @@ namespace CourtSide.Services.Reports;
 public interface IReportService
 {
     /// <summary>Builds a reservations + revenue PDF report for the given period/center (admin).</summary>
-    Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId);
+    Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
+        string? language = null);
 }
 
 /// <summary>Generates PDF reports with QuestPDF.</summary>
 public class ReportService : IReportService
 {
-    private static readonly Dictionary<ReservationStatus, string> StatusLabels = new()
-    {
-        [ReservationStatus.Pending] = "Na čekanju",
-        [ReservationStatus.Confirmed] = "Potvrđeno",
-        [ReservationStatus.Cancelled] = "Otkazano",
-        [ReservationStatus.Completed] = "Završeno"
-    };
-
     static ReportService() => QuestPDF.Settings.License = LicenseType.Community;
 
     private readonly DatabaseContext _db;
 
     public ReportService(DatabaseContext db) => _db = db;
 
-    public async Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId)
+    public async Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
+        string? language = null)
     {
+        var labels = ReportLabels.For(language);
+
         var query = _db.Reservations
             .Include(r => r.Court).ThenInclude(c => c.SportCenter)
             .Include(r => r.Client)
@@ -66,8 +63,8 @@ public class ReportService : IReportService
             .OrderByDescending(x => x.Revenue).ThenByDescending(x => x.Count)
             .ToList();
 
-        var periodText = $"{(dateFrom.HasValue ? dateFrom.Value.ToString("dd.MM.yyyy") : "početak")}" +
-                         $" – {(dateTo.HasValue ? dateTo.Value.ToString("dd.MM.yyyy") : "danas")}";
+        var periodText = $"{(dateFrom.HasValue ? dateFrom.Value.ToString("dd.MM.yyyy") : labels.PeriodStart)}" +
+                         $" – {(dateTo.HasValue ? dateTo.Value.ToString("dd.MM.yyyy") : labels.PeriodEnd)}";
         var generatedAt = DateTime.UtcNow.ToString("dd.MM.yyyy HH:mm 'UTC'");
 
         var document = Document.Create(container =>
@@ -85,12 +82,12 @@ public class ReportService : IReportService
                         row.RelativeItem().Column(c =>
                         {
                             c.Item().Text("CourtSide").Bold().FontSize(20).FontColor("#1A5276");
-                            c.Item().Text("Izvještaj o rezervacijama i prihodu").FontSize(12).FontColor("#555555");
+                            c.Item().Text(labels.Subtitle).FontSize(12).FontColor("#555555");
                         });
                         row.ConstantItem(180).AlignRight().Column(c =>
                         {
-                            c.Item().Text($"Period: {periodText}");
-                            c.Item().Text($"Generisano: {generatedAt}").FontColor("#777777");
+                            c.Item().Text($"{labels.Period}: {periodText}");
+                            c.Item().Text($"{labels.GeneratedAt}: {generatedAt}").FontColor("#777777");
                         });
                     });
                     header.Item().PaddingTop(6).LineHorizontal(1).LineColor("#1A5276");
@@ -103,19 +100,19 @@ public class ReportService : IReportService
                     // ----- Sažetak -----
                     content.Item().Column(c =>
                     {
-                        c.Item().Text("Sažetak").Bold().FontSize(13);
+                        c.Item().Text(labels.Summary).Bold().FontSize(13);
                         c.Item().PaddingTop(4).Row(row =>
                         {
                             row.RelativeItem().Column(s =>
                             {
-                                s.Item().Text($"Ukupno rezervacija: {reservations.Count}");
+                                s.Item().Text($"{labels.TotalReservations}: {reservations.Count}");
                                 foreach (var status in Enum.GetValues<ReservationStatus>())
-                                    s.Item().Text($"  • {StatusLabels[status]}: {(statusCounts.TryGetValue(status, out var n) ? n : 0)}");
+                                    s.Item().Text($"  • {labels.Statuses[status]}: {(statusCounts.TryGetValue(status, out var n) ? n : 0)}");
                             });
                             row.RelativeItem().Column(s =>
                             {
-                                s.Item().Text($"Naplaćeni prihod: {collectedRevenue:N2} BAM").Bold().FontColor("#1E8449");
-                                s.Item().Text($"Plaćenih rezervacija: {paidCount}");
+                                s.Item().Text($"{labels.CollectedRevenue}: {collectedRevenue:N2} BAM").Bold().FontColor("#1E8449");
+                                s.Item().Text($"{labels.PaidReservations}: {paidCount}");
                             });
                         });
                     });
@@ -123,7 +120,7 @@ public class ReportService : IReportService
                     // ----- Po terenu -----
                     content.Item().Column(c =>
                     {
-                        c.Item().Text("Po terenu").Bold().FontSize(13);
+                        c.Item().Text(labels.ByCourt).Bold().FontSize(13);
                         c.Item().PaddingTop(4).Table(table =>
                         {
                             table.ColumnsDefinition(cols =>
@@ -135,10 +132,10 @@ public class ReportService : IReportService
                             });
                             table.Header(h =>
                             {
-                                HeaderCell(h.Cell(), "Teren");
-                                HeaderCell(h.Cell(), "Centar");
-                                HeaderCell(h.Cell(), "Rezervacija");
-                                HeaderCell(h.Cell(), "Naplaćeno (BAM)");
+                                HeaderCell(h.Cell(), labels.Court);
+                                HeaderCell(h.Cell(), labels.Centre);
+                                HeaderCell(h.Cell(), labels.ReservationCount);
+                                HeaderCell(h.Cell(), labels.Collected);
                             });
                             foreach (var c2 in perCourt)
                             {
@@ -148,14 +145,14 @@ public class ReportService : IReportService
                                 BodyCell(table.Cell(), $"{c2.Revenue:N2}");
                             }
                             if (perCourt.Count == 0)
-                                table.Cell().ColumnSpan(4).Element(e => e.Padding(4)).Text("Nema podataka za period.").Italic();
+                                table.Cell().ColumnSpan(4).Element(e => e.Padding(4)).Text(labels.NoDataForPeriod).Italic();
                         });
                     });
 
                     // ----- Lista rezervacija -----
                     content.Item().Column(c =>
                     {
-                        c.Item().Text("Rezervacije").Bold().FontSize(13);
+                        c.Item().Text(labels.Reservations).Bold().FontSize(13);
                         c.Item().PaddingTop(4).Table(table =>
                         {
                             table.ColumnsDefinition(cols =>
@@ -170,33 +167,33 @@ public class ReportService : IReportService
                             });
                             table.Header(h =>
                             {
-                                HeaderCell(h.Cell(), "Broj");
-                                HeaderCell(h.Cell(), "Datum");
-                                HeaderCell(h.Cell(), "Termin");
-                                HeaderCell(h.Cell(), "Teren");
-                                HeaderCell(h.Cell(), "Klijent");
-                                HeaderCell(h.Cell(), "Status");
-                                HeaderCell(h.Cell(), "Plaćeno");
+                                HeaderCell(h.Cell(), labels.Number);
+                                HeaderCell(h.Cell(), labels.Date);
+                                HeaderCell(h.Cell(), labels.Slot);
+                                HeaderCell(h.Cell(), labels.Court);
+                                HeaderCell(h.Cell(), labels.Client);
+                                HeaderCell(h.Cell(), labels.Status);
+                                HeaderCell(h.Cell(), labels.Paid);
                             });
                             foreach (var r in reservations)
                             {
-                                BodyCell(table.Cell(), r.ReservationNumber);
+                                BodyCell(table.Cell(), ReservationNumber.Short(r.ReservationNumber));
                                 BodyCell(table.Cell(), r.Date.ToString("dd.MM.yyyy"));
                                 BodyCell(table.Cell(), $"{r.StartTime:HH\\:mm}-{r.EndTime:HH\\:mm}");
                                 BodyCell(table.Cell(), r.Court.Name);
                                 BodyCell(table.Cell(), $"{r.Client.FirstName} {r.Client.LastName}");
-                                BodyCell(table.Cell(), StatusLabels[r.Status]);
-                                BodyCell(table.Cell(), Paid(r) ? "Da" : "Ne");
+                                BodyCell(table.Cell(), labels.Statuses[r.Status]);
+                                BodyCell(table.Cell(), Paid(r) ? labels.Yes : labels.No);
                             }
                             if (reservations.Count == 0)
-                                table.Cell().ColumnSpan(7).Element(e => e.Padding(4)).Text("Nema rezervacija za period.").Italic();
+                                table.Cell().ColumnSpan(7).Element(e => e.Padding(4)).Text(labels.NoReservationsForPeriod).Italic();
                         });
                     });
                 });
 
                 page.Footer().AlignCenter().Text(text =>
                 {
-                    text.Span("Strana ");
+                    text.Span(labels.Page);
                     text.CurrentPageNumber();
                     text.Span(" / ");
                     text.TotalPages();
