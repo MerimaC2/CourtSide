@@ -5,6 +5,8 @@ class SportCenter {
   final String? description;
   final int cityId;
   final String? cityName;
+  final double? latitude;
+  final double? longitude;
 
   SportCenter({
     required this.id,
@@ -13,6 +15,8 @@ class SportCenter {
     this.description,
     required this.cityId,
     this.cityName,
+    this.latitude,
+    this.longitude,
   });
 
   factory SportCenter.fromJson(Map<String, dynamic> json) => SportCenter(
@@ -22,5 +26,7 @@ class SportCenter {
         description: json['description'] as String?,
         cityId: json['cityId'] as int? ?? 0,
         cityName: json['cityName'] as String?,
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
       );
 }
