@@ -19,6 +19,7 @@ class Reservation {
   final String? paymentMethod;
   final String? paymentStatus;
   final bool isPaid;
+  final bool hasReview;
 
   Reservation({
     required this.id,
@@ -41,6 +42,7 @@ class Reservation {
     this.paymentMethod,
     this.paymentStatus,
     required this.isPaid,
+    required this.hasReview,
   });
 
   factory Reservation.fromJson(Map<String, dynamic> json) => Reservation(
@@ -64,6 +66,7 @@ class Reservation {
         paymentMethod: json['paymentMethod'] as String?,
         paymentStatus: json['paymentStatus'] as String?,
         isPaid: json['isPaid'] as bool? ?? false,
+        hasReview: json['hasReview'] as bool? ?? false,
       );
 
   bool get isActive => status == 'Pending' || status == 'Confirmed';

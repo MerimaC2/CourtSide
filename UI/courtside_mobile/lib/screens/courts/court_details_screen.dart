@@ -3,7 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/court.dart';
+import '../../models/court_review.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/court_provider.dart';
+import '../../providers/court_review_provider.dart';
+import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../reservations/availability_screen.dart';
 
@@ -17,11 +21,31 @@ class CourtDetailsScreen extends StatefulWidget {
 }
 
 class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
+  List<CourtReview> _reviews = [];
+  bool _loadingReviews = true;
+
   @override
   void initState() {
     super.initState();
     // Implicit signal for the recommender; failure here shouldn't block the screen.
     context.read<CourtProvider>().logView(widget.court.id).catchError((_) {});
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    try {
+      final result = await context
+          .read<CourtReviewProvider>()
+          .get(filter: {'CourtId': widget.court.id, 'Page': 1, 'PageSize': 50});
+      if (!mounted) return;
+      setState(() {
+        _reviews = result.result;
+        _loadingReviews = false;
+      });
+    } catch (_) {
+      // The court's own details stay usable even if its reviews can't be loaded.
+      if (mounted) setState(() => _loadingReviews = false);
+    }
   }
 
   @override
@@ -38,15 +62,19 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                width: 96,
-                height: 96,
-                decoration: BoxDecoration(
-                  color: kPrimaryColor.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.sports_tennis, color: kPrimaryColor, size: 48),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 180,
+                child: court.primaryImageId != null
+                    ? Image.network(
+                        '${BaseProvider.baseUrl}courts/${court.id}/images/${court.primaryImageId}',
+                        headers: {'Authorization': 'Bearer ${Authorization.token}'},
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
               ),
             ),
             const SizedBox(height: 20),
@@ -59,6 +87,19 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
                   .join(' • '),
               style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
             ),
+            if (court.averageRating != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 18),
+                  const SizedBox(width: 4),
+                  Text(court.averageRating!.toStringAsFixed(1),
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 4),
+                  Text('(${court.reviewCount})', style: TextStyle(color: Colors.grey.shade600)),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             _infoRow(Icons.payments_outlined, 'Cijena po satu', formatPrice(court.pricePerHour)),
             if (court.sportCenterName != null && court.sportCenterName!.isNotEmpty)
@@ -88,11 +129,90 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 28),
+            _buildReviews(),
           ],
         ),
       ),
     );
   }
+
+  /// Reviews left by clients after a completed booking on this court.
+  Widget _buildReviews() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(tr(context, 'Recenzije'),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            if (!_loadingReviews && _reviews.isNotEmpty)
+              Text('(${_reviews.length})', style: TextStyle(color: Colors.grey.shade600)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingReviews)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_reviews.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(tr(context, 'Još nema recenzija.'),
+                style: TextStyle(color: Colors.grey.shade600)),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _reviews.length,
+            separatorBuilder: (_, _) => const Divider(height: 16),
+            itemBuilder: (_, i) => _reviewTile(_reviews[i]),
+          ),
+      ],
+    );
+  }
+
+  Widget _reviewTile(CourtReview review) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            ...List.generate(
+              5,
+              (i) => Icon(i < review.rating ? Icons.star : Icons.star_border,
+                  size: 15, color: Colors.amber),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                review.userName ?? '',
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              formatDisplayDate(formatApiDate(review.createdAt)),
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+        if (review.comment != null && review.comment!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(review.comment!, style: TextStyle(color: Colors.grey.shade800)),
+        ],
+      ],
+    );
+  }
+
+  Widget _imagePlaceholder() => Container(
+        color: kPrimaryColor.withValues(alpha: 0.12),
+        alignment: Alignment.center,
+        child: const Icon(Icons.sports_tennis, color: kPrimaryColor, size: 48),
+      );
 
   Widget _infoRow(IconData icon, String label, String value, {Color? iconColor}) {
     return Padding(

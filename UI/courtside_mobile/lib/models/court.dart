@@ -9,6 +9,8 @@ class Court {
   final double pricePerHour;
   final bool isActive;
   final int? primaryImageId;
+  final double? averageRating;
+  final int reviewCount;
 
   Court({
     required this.id,
@@ -21,6 +23,8 @@ class Court {
     required this.pricePerHour,
     required this.isActive,
     this.primaryImageId,
+    this.averageRating,
+    this.reviewCount = 0,
   });
 
   factory Court.fromJson(Map<String, dynamic> json) => Court(
@@ -34,5 +38,7 @@ class Court {
         pricePerHour: (json['pricePerHour'] as num?)?.toDouble() ?? 0,
         isActive: json['isActive'] as bool? ?? false,
         primaryImageId: json['primaryImageId'] as int?,
+        averageRating: (json['averageRating'] as num?)?.toDouble(),
+        reviewCount: json['reviewCount'] as int? ?? 0,
       );
 }

@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
+import '../../providers/court_review_provider.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/dialog_header.dart';
 
 class MyReservationsScreen extends StatefulWidget {
   const MyReservationsScreen({super.key});
@@ -71,7 +73,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr(ctx, 'Otkazivanje rezervacije')),
+        title: dialogHeader(ctx, tr(ctx, 'Otkazivanje rezervacije')),
         content: TextField(
           controller: reasonController,
           decoration: InputDecoration(labelText: tr(ctx, 'Razlog otkazivanja')),
@@ -92,6 +94,68 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
       await context.read<ReservationProvider>().cancel(reservation.id, reason);
       if (!mounted) return;
       showSuccess(context, 'Rezervacija je otkazana.');
+      _load();
+    } catch (e) {
+      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _rate(Reservation reservation) async {
+    int rating = 5;
+    final commentController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: dialogHeader(ctx, tr(ctx, 'Ocijeni teren')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (i) {
+                  final starIndex = i + 1;
+                  return IconButton(
+                    onPressed: () => setDialogState(() => rating = starIndex),
+                    icon: Icon(
+                      starIndex <= rating ? Icons.star : Icons.star_border,
+                      color: Colors.amber,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: commentController,
+                maxLines: 3,
+                decoration: InputDecoration(labelText: tr(ctx, 'Komentar (opciono)')),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(tr(ctx, 'Odustani')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(tr(ctx, 'Sačuvaj')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    try {
+      await context.read<CourtReviewProvider>().submit(
+            reservationId: reservation.id,
+            rating: rating,
+            comment: commentController.text.trim(),
+          );
+      if (!mounted) return;
+      showSuccess(context, 'Hvala na ocjeni!');
       _load();
     } catch (e) {
       if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
@@ -215,6 +279,17 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
                         tr(context, 'Otkazivanje nije moguće manje od 24h prije termina.'),
                         style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                       ),
+              ),
+            ],
+            if (r.status == 'Completed' && !r.hasReview) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _rate(r),
+                  icon: const Icon(Icons.star_outline, size: 18, color: kPrimaryColor),
+                  label: Text(tr(context, 'Ocijeni'), style: const TextStyle(color: kPrimaryColor)),
+                ),
               ),
             ],
           ],
