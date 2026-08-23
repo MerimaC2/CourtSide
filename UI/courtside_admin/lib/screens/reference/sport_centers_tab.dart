@@ -146,10 +146,13 @@ class _SportCentersTabState extends State<SportCentersTab> {
                 ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _cities.isEmpty ? null : () => _openForm(),
-                icon: const Icon(Icons.add),
-                label: Text(tr(context, 'Dodaj sportski centar')),
+              Tooltip(
+                message: _cities.isEmpty ? tr(context, 'Prvo dodajte grad.') : '',
+                child: FilledButton.icon(
+                  onPressed: _cities.isEmpty ? null : () => _openForm(),
+                  icon: const Icon(Icons.add),
+                  label: Text(tr(context, 'Dodaj sportski centar')),
+                ),
               ),
             ],
           ),

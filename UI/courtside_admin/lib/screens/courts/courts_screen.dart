@@ -171,10 +171,16 @@ class _CourtsScreenState extends State<CourtsScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: (_sports.isEmpty || _sportCenters.isEmpty) ? null : () => _openForm(),
-                icon: const Icon(Icons.add),
-                label: Text(tr(context, 'Dodaj teren')),
+              Tooltip(
+                message: (_sports.isEmpty || _sportCenters.isEmpty)
+                    ? tr(context, 'Prvo dodajte sport i sportski centar u Referentnim podacima.')
+                    : '',
+                child: FilledButton.icon(
+                  onPressed:
+                      (_sports.isEmpty || _sportCenters.isEmpty) ? null : () => _openForm(),
+                  icon: const Icon(Icons.add),
+                  label: Text(tr(context, 'Dodaj teren')),
+                ),
               ),
             ],
           ),

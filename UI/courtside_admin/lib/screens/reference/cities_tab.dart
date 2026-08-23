@@ -146,10 +146,13 @@ class _CitiesTabState extends State<CitiesTab> {
                 ),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: _countries.isEmpty ? null : () => _openForm(),
-                icon: const Icon(Icons.add),
-                label: Text(tr(context, 'Dodaj grad')),
+              Tooltip(
+                message: _countries.isEmpty ? tr(context, 'Prvo dodajte državu.') : '',
+                child: FilledButton.icon(
+                  onPressed: _countries.isEmpty ? null : () => _openForm(),
+                  icon: const Icon(Icons.add),
+                  label: Text(tr(context, 'Dodaj grad')),
+                ),
               ),
             ],
           ),
