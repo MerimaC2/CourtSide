@@ -11,6 +11,12 @@ public interface ICurrentUser
     string? Username { get; }
     bool IsAdmin { get; }
     bool IsAuthenticated { get; }
+
+    /// The <c>jti</c> claim of the token this request was made with.
+    string? TokenId { get; }
+
+    /// When that token stops being valid on its own.
+    DateTime? TokenExpiresAt { get; }
 }
 
 public class CurrentUser : ICurrentUser
@@ -35,4 +41,17 @@ public class CurrentUser : ICurrentUser
     public string? Username => Principal?.FindFirst(ClaimTypes.Name)?.Value;
 
     public bool IsAdmin => Principal?.IsInRole(Roles.Admin) ?? false;
+
+    public string? TokenId => Principal?.FindFirst("jti")?.Value;
+
+    public DateTime? TokenExpiresAt
+    {
+        get
+        {
+            var value = Principal?.FindFirst("exp")?.Value;
+            return long.TryParse(value, out var seconds)
+                ? DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime
+                : null;
+        }
+    }
 }

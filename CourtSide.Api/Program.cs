@@ -6,6 +6,7 @@ using CourtSide.Infrastructure;
 using CourtSide.Infrastructure.Messaging;
 using CourtSide.Infrastructure.Seed;
 using CourtSide.Services;
+using CourtSide.Services.Auth;
 using CourtSide.Shared.Hubs;
 using CourtSide.Shared.Messaging;
 using CourtSide.Shared.Models;
@@ -101,9 +102,9 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key))
         };
 
-        // Allow SignalR (WebSocket) clients to pass the JWT via the access_token query string.
         options.Events = new JwtBearerEvents
         {
+            // Allow SignalR (WebSocket) clients to pass the JWT via the access_token query string.
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];
@@ -111,6 +112,18 @@ builder.Services.AddAuthentication(options =>
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
                     context.Token = accessToken;
                 return Task.CompletedTask;
+            },
+            // A signed-out token is still cryptographically valid, so it has to be checked
+            // against the revocation list before the request is treated as authenticated.
+            OnTokenValidated = async context =>
+            {
+                var tokenId = context.Principal?.FindFirst("jti")?.Value;
+                if (string.IsNullOrEmpty(tokenId)) return;
+
+                var revocation = context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenRevocationService>();
+                if (await revocation.IsRevokedAsync(tokenId, context.HttpContext.RequestAborted))
+                    context.Fail("Token je poništen odjavom.");
             }
         };
     });
@@ -118,7 +131,12 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
 // ----- MVC + JSON (enums as strings) -----
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+    {
+        // FluentValidation owns the validation messages; without this, non-nullable reference
+        // types also emit MVC's own English "field is required" text alongside them.
+        options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+    })
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddSignalR();

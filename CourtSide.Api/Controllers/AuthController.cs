@@ -22,4 +22,13 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
         => Ok(await _authService.RegisterAsync(request));
+
+    /// <summary>Invalidates the caller's token server-side.</summary>
+    [Authorize]
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        await _authService.LogoutAsync();
+        return NoContent();
+    }
 }

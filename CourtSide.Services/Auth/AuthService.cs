@@ -2,6 +2,7 @@ using CourtSide.Core.Dto;
 using CourtSide.Core.Entities.Identity;
 using CourtSide.Core.Exceptions;
 using CourtSide.Shared.Constants;
+using CourtSide.Shared.Services;
 using Microsoft.AspNetCore.Identity;
 
 namespace CourtSide.Services.Auth;
@@ -10,17 +11,36 @@ public interface IAuthService
 {
     Task<AuthResponse> LoginAsync(LoginRequest request);
     Task<AuthResponse> RegisterAsync(RegisterRequest request);
+    Task LogoutAsync();
 }
 
 public class AuthService : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITokenService _tokenService;
+    private readonly ITokenRevocationService _revocation;
+    private readonly ICurrentUser _currentUser;
 
-    public AuthService(UserManager<ApplicationUser> userManager, ITokenService tokenService)
+    public AuthService(UserManager<ApplicationUser> userManager, ITokenService tokenService,
+        ITokenRevocationService revocation, ICurrentUser currentUser)
     {
         _userManager = userManager;
         _tokenService = tokenService;
+        _revocation = revocation;
+        _currentUser = currentUser;
+    }
+
+    /// Invalidates the token this request was made with, so it stops working immediately
+    /// rather than remaining usable until it expires.
+    public async Task LogoutAsync()
+    {
+        var tokenId = _currentUser.TokenId;
+        var userId = _currentUser.UserId;
+        var expiresAt = _currentUser.TokenExpiresAt;
+        if (tokenId is null || userId is null || expiresAt is null)
+            throw new BusinessException("Niste prijavljeni.");
+
+        await _revocation.RevokeAsync(tokenId, userId.Value, expiresAt.Value);
     }
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)

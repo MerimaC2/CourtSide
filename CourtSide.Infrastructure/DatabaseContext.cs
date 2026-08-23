@@ -24,6 +24,7 @@ public class DatabaseContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<News> News => Set<News>();
     public DbSet<CourtViewLog> CourtViewLogs => Set<CourtViewLog>();
+    public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -67,6 +68,8 @@ public class DatabaseContext : IdentityDbContext<ApplicationUser, ApplicationRol
         builder.Entity<Reservation>().HasIndex(x => new { x.CourtId, x.Date });
         builder.Entity<Reservation>().HasIndex(x => x.Status);
         builder.Entity<CourtViewLog>().HasIndex(x => new { x.UserId, x.CourtId });
+        // Looked up on every authenticated request, so the jti must be indexed.
+        builder.Entity<RevokedToken>().HasIndex(x => x.TokenId).IsUnique();
 
         // ----- Global soft-delete query filter for every entity exposing an IsDeleted flag. -----
         foreach (var entityType in builder.Model.GetEntityTypes())

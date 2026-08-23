@@ -606,6 +606,9 @@ namespace CourtSide.Infrastructure.Migrations
                     b.Property<int>("ClientId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("ConfirmedAt")
                         .HasColumnType("datetime2");
 
@@ -671,6 +674,41 @@ namespace CourtSide.Infrastructure.Migrations
                     b.HasIndex("CourtId", "Date");
 
                     b.ToTable("Reservations");
+                });
+
+            modelBuilder.Entity("CourtSide.Core.Entities.RevokedToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("TokenId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenId")
+                        .IsUnique();
+
+                    b.ToTable("RevokedTokens");
                 });
 
             modelBuilder.Entity("CourtSide.Core.Entities.Sport", b =>
@@ -918,7 +956,7 @@ namespace CourtSide.Infrastructure.Migrations
                         .IsRequired();
 
                     b.HasOne("CourtSide.Core.Entities.Reservation", "Reservation")
-                        .WithMany()
+                        .WithMany("Reviews")
                         .HasForeignKey("ReservationId")
                         .OnDelete(DeleteBehavior.Restrict);
 
@@ -1119,6 +1157,8 @@ namespace CourtSide.Infrastructure.Migrations
             modelBuilder.Entity("CourtSide.Core.Entities.Reservation", b =>
                 {
                     b.Navigation("Payment");
+
+                    b.Navigation("Reviews");
                 });
 
             modelBuilder.Entity("CourtSide.Core.Entities.Sport", b =>
