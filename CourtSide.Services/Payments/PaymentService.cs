@@ -28,6 +28,10 @@ public interface IPaymentService
     /// <summary>Refunds a completed payment (Stripe API for online, status-only for cash). No-op if nothing to refund.</summary>
     Task<PaymentDto?> RefundAsync(int reservationId);
 
+    /// <summary>Server-side check of the Stripe PaymentIntent status; finalizes the payment if it succeeded.
+    /// The client calls this right after the payment sheet closes, so payments work without the webhook.</summary>
+    Task<PaymentDto> VerifyAsync(int reservationId);
+
     /// <summary>Handles a verified Stripe webhook (payment_intent.succeeded / payment_failed).</summary>
     Task HandleWebhookAsync(string json, string signature);
 }
@@ -205,16 +209,7 @@ public class PaymentService : IPaymentService
         switch (stripeEvent.Type)
         {
             case "payment_intent.succeeded":
-                if (payment.Status != PaymentStatus.Completed)
-                {
-                    payment.Status = PaymentStatus.Completed;
-                    payment.PaidAt = DateTime.UtcNow;
-                    payment.UpdatedAt = DateTime.UtcNow;
-                    await _db.SaveChangesAsync();
-                    await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
-                        "Plaćanje uspješno",
-                        $"Online plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je zaprimljeno.");
-                }
+                await FinalizeSucceededAsync(payment);
                 break;
 
             case "payment_intent.payment_failed":
@@ -223,6 +218,52 @@ public class PaymentService : IPaymentService
                 await _db.SaveChangesAsync();
                 break;
         }
+    }
+
+    public async Task<PaymentDto> VerifyAsync(int reservationId)
+    {
+        EnsureStripeConfigured();
+        var payment = await LoadAsync(reservationId);
+        EnsureOwnerOrAdmin(payment.Reservation);
+
+        if (payment.Status == PaymentStatus.Completed) return ToDto(payment);
+        if (string.IsNullOrEmpty(payment.StripePaymentIntentId))
+            throw new BusinessException("Rezervacija nema pokrenuto online plaćanje.");
+
+        var service = new PaymentIntentService();
+        var intent = await service.GetAsync(payment.StripePaymentIntentId,
+            requestOptions: new RequestOptions { ApiKey = _stripe.SecretKey });
+
+        if (intent.Status == "succeeded")
+        {
+            await FinalizeSucceededAsync(payment);
+        }
+        else if (intent.Status == "canceled")
+        {
+            payment.Status = PaymentStatus.Failed;
+            payment.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return ToDto(payment);
+    }
+
+    /// <summary>
+    /// Marks an online payment as collected and notifies the client. Reached from two
+    /// directions — the Stripe webhook and the client-triggered verification — so it is
+    /// idempotent: once completed, calling it again changes nothing.
+    /// </summary>
+    private async Task FinalizeSucceededAsync(Payment payment)
+    {
+        if (payment.Status == PaymentStatus.Completed) return;
+
+        payment.Status = PaymentStatus.Completed;
+        payment.PaidAt = DateTime.UtcNow;
+        payment.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
+            "Plaćanje uspješno",
+            $"Online plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je zaprimljeno.");
     }
 
     private async Task<Payment> LoadAsync(int reservationId)

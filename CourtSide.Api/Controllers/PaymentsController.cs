@@ -26,6 +26,11 @@ public class PaymentsController : ControllerBase
         => Ok(await _payments.CreateIntentAsync(reservationId));
 
     /// <summary>Admin: record on-site cash payment.</summary>
+    /// <summary>Client-triggered check of an online payment's status with Stripe (finalizes if succeeded).</summary>
+    [HttpPost("{reservationId:int}/verify")]
+    public async Task<ActionResult<PaymentDto>> Verify(int reservationId)
+        => Ok(await _payments.VerifyAsync(reservationId));
+
     [HttpPost("{reservationId:int}/cash")]
     [Authorize(Roles = Roles.Admin)]
     public async Task<ActionResult<PaymentDto>> MarkCashPaid(int reservationId)
@@ -45,7 +50,8 @@ public class PaymentsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Webhook()
     {
-        var json = await new StreamReader(Request.Body).ReadToEndAsync();
+        using var reader = new StreamReader(Request.Body);
+        var json = await reader.ReadToEndAsync();
         await _payments.HandleWebhookAsync(json, Request.Headers["Stripe-Signature"]!);
         return Ok();
     }
