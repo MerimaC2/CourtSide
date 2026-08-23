@@ -1,5 +1,7 @@
 using CourtSide.Core.Entities;
 using CourtSide.Core.Entities.Identity;
+using CourtSide.Core.Enumerations;
+using CourtSide.Core.Helpers;
 using CourtSide.Shared.Constants;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +12,7 @@ namespace CourtSide.Infrastructure.Seed;
 /// <summary>Seeds roles, test users and reference/domain data (idempotent) at startup.</summary>
 public static class DatabaseSeeder
 {
-    // 1x1 placeholder PNG — replaced with real court photos in a later phase.
+    // 1x1 placeholder PNG used wherever a seeded record needs an image.
     private static readonly byte[] PlaceholderImage =
         Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
@@ -24,6 +26,8 @@ public static class DatabaseSeeder
         await SeedRolesAsync(roleManager);
         await SeedUsersAsync(userManager);
         await SeedDomainAsync(db);
+        await SeedNewsAsync(db);
+        await SeedActivityAsync(db, userManager);
     }
 
     private static async Task SeedRolesAsync(RoleManager<ApplicationRole> roleManager)
@@ -40,6 +44,11 @@ public static class DatabaseSeeder
         await EnsureUserAsync(userManager, "admin", "admin@courtside.local", "Admin", "Korisnik", "test", Roles.Admin);
         await EnsureUserAsync(userManager, "desktop", "desktop@courtside.local", "Desktop", "Administrator", "test", Roles.Admin);
         await EnsureUserAsync(userManager, "mobile", "mobile@courtside.local", "Mobile", "Korisnik", "test", Roles.User);
+        // Extra clients so reservation history spans several users, which the recommender
+        // needs in order to find similarities between them.
+        await EnsureUserAsync(userManager, "amina", "amina@courtside.local", "Amina", "Hodžić", "test", Roles.User);
+        await EnsureUserAsync(userManager, "tarik", "tarik@courtside.local", "Tarik", "Begić", "test", Roles.User);
+        await EnsureUserAsync(userManager, "lejla", "lejla@courtside.local", "Lejla", "Softić", "test", Roles.User);
     }
 
     private static async Task EnsureUserAsync(UserManager<ApplicationUser> userManager,
@@ -93,6 +102,234 @@ public static class DatabaseSeeder
             CreateCourt("Teniski teren 1", tenis, centerMo, 25m, now),
             CreateCourt("Padel teren A", padel, centerSa, 30m, now),
             CreateCourt("Badminton teren 1", badminton, centerSa, 20m, now));
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Booking history so the app has something to show on first run: reservations across every
+    /// status, their payments, reviews on the finished ones and the matching notifications.
+    /// The recommender also needs real history before it can suggest anything.
+    /// </summary>
+    private static async Task SeedActivityAsync(DatabaseContext db, UserManager<ApplicationUser> userManager)
+    {
+        if (await db.Reservations.AnyAsync()) return;
+
+        var courts = await db.Courts.OrderBy(c => c.Id).ToListAsync();
+        if (courts.Count < 4) return;
+
+        var clients = new List<ApplicationUser>();
+        foreach (var name in new[] { "mobile", "amina", "tarik", "lejla" })
+        {
+            var user = await userManager.FindByNameAsync(name);
+            if (user is not null) clients.Add(user);
+        }
+        if (clients.Count < 4) return;
+
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+        var usedNumbers = new HashSet<string>();
+
+        string NextNumber()
+        {
+            string number;
+            do { number = ReservationNumber.Generate(); } while (!usedNumbers.Add(number));
+            return number;
+        }
+
+        Reservation Book(ApplicationUser client, Court court, int dayOffset, int hour,
+            ReservationStatus status, PaymentMethod method, PaymentStatus paymentStatus)
+        {
+            var date = today.AddDays(dayOffset);
+            var createdAt = now.AddDays(dayOffset - 2);
+            var price = court.PricePerHour;
+
+            var reservation = new Reservation
+            {
+                ReservationNumber = NextNumber(),
+                ClientId = client.Id,
+                CourtId = court.Id,
+                Date = date,
+                StartTime = new TimeOnly(hour, 0),
+                EndTime = new TimeOnly(hour + 1, 0),
+                TotalPrice = price,
+                Status = status,
+                ContactName = client.FirstName + " " + client.LastName,
+                ContactPhone = "061 234 567",
+                CreatedAt = createdAt,
+                Payment = new Payment
+                {
+                    Method = method,
+                    Amount = price,
+                    Currency = "BAM",
+                    Status = paymentStatus,
+                    PaidAt = paymentStatus == PaymentStatus.Completed ? createdAt : null,
+                    CreatedAt = createdAt
+                }
+            };
+
+            if (status is ReservationStatus.Confirmed or ReservationStatus.Completed)
+                reservation.ConfirmedAt = createdAt.AddHours(1);
+
+            if (status == ReservationStatus.Completed)
+                reservation.CompletedAt = date.ToDateTime(new TimeOnly(hour + 1, 0));
+
+            if (status == ReservationStatus.Cancelled)
+            {
+                reservation.CancelledAt = createdAt.AddHours(2);
+                reservation.CancellationReason = "Spriječen dolazak zbog poslovnih obaveza.";
+            }
+
+            return reservation;
+        }
+
+        var reservations = new List<Reservation>
+        {
+            // Finished bookings — these drive the ratings and give the recommender its history.
+            Book(clients[0], courts[0], -21, 18, ReservationStatus.Completed, PaymentMethod.Stripe, PaymentStatus.Completed),
+            Book(clients[0], courts[1], -14, 19, ReservationStatus.Completed, PaymentMethod.Cash, PaymentStatus.Completed),
+            Book(clients[0], courts[0], -7, 20, ReservationStatus.Completed, PaymentMethod.Stripe, PaymentStatus.Completed),
+            Book(clients[1], courts[0], -18, 17, ReservationStatus.Completed, PaymentMethod.Cash, PaymentStatus.Completed),
+            Book(clients[1], courts[1], -11, 18, ReservationStatus.Completed, PaymentMethod.Stripe, PaymentStatus.Completed),
+            Book(clients[2], courts[2], -16, 19, ReservationStatus.Completed, PaymentMethod.Stripe, PaymentStatus.Completed),
+            Book(clients[2], courts[3], -9, 20, ReservationStatus.Completed, PaymentMethod.Cash, PaymentStatus.Completed),
+            Book(clients[3], courts[2], -12, 17, ReservationStatus.Completed, PaymentMethod.Cash, PaymentStatus.Completed),
+            Book(clients[3], courts[1], -5, 18, ReservationStatus.Completed, PaymentMethod.Stripe, PaymentStatus.Completed),
+
+            // One cancelled booking, so every status appears in the list and the report.
+            Book(clients[0], courts[3], -4, 16, ReservationStatus.Cancelled, PaymentMethod.Cash, PaymentStatus.Pending),
+
+            // Upcoming bookings: confirmed, and still awaiting an administrator's confirmation.
+            Book(clients[0], courts[1], 3, 18, ReservationStatus.Confirmed, PaymentMethod.Stripe, PaymentStatus.Completed),
+            Book(clients[0], courts[2], 6, 19, ReservationStatus.Pending, PaymentMethod.Cash, PaymentStatus.Pending),
+            Book(clients[1], courts[0], 4, 20, ReservationStatus.Confirmed, PaymentMethod.Cash, PaymentStatus.Pending),
+            Book(clients[2], courts[3], 5, 17, ReservationStatus.Pending, PaymentMethod.Stripe, PaymentStatus.Pending),
+        };
+
+        db.Reservations.AddRange(reservations);
+        await db.SaveChangesAsync();
+
+        var comments = new (int Rating, string Comment)[]
+        {
+            (5, "Teren u odličnom stanju, osvjetljenje odlično."),
+            (4, "Sve pohvale, jedino je parking znao biti pun."),
+            (5, "Redovno dolazimo, uvijek čisto i uredno."),
+            (4, "Dobra podloga, preporučujem."),
+            (3, "Solidno, ali svlačionice bi mogle biti bolje."),
+            (5, "Najbolji teren u gradu."),
+        };
+
+        var completed = reservations
+            .Where(r => r.Status == ReservationStatus.Completed)
+            .Take(comments.Length)
+            .ToList();
+
+        for (var i = 0; i < completed.Count; i++)
+        {
+            var reservation = completed[i];
+            db.CourtReviews.Add(new CourtReview
+            {
+                CourtId = reservation.CourtId,
+                UserId = reservation.ClientId,
+                ReservationId = reservation.Id,
+                Rating = comments[i].Rating,
+                Comment = comments[i].Comment,
+                CreatedAt = reservation.CompletedAt ?? reservation.CreatedAt
+            });
+        }
+
+        // The notifications these bookings would have produced while they were happening.
+        foreach (var reservation in reservations)
+        {
+            var shortNumber = ReservationNumber.Short(reservation.ReservationNumber);
+
+            db.Notifications.Add(new Notification
+            {
+                UserId = reservation.ClientId,
+                Type = NotificationType.ReservationCreated,
+                Title = "Rezervacija kreirana",
+                Text = "Vaša rezervacija " + shortNumber + " je kreirana i čeka potvrdu.",
+                IsRead = true,
+                CreatedAt = reservation.CreatedAt
+            });
+
+            switch (reservation.Status)
+            {
+                case ReservationStatus.Completed:
+                    db.Notifications.Add(new Notification
+                    {
+                        UserId = reservation.ClientId,
+                        Type = NotificationType.ReservationCompleted,
+                        Title = "Rezervacija završena",
+                        Text = "Vaša rezervacija " + shortNumber + " je završena. Možete ocijeniti teren.",
+                        IsRead = false,
+                        CreatedAt = reservation.CompletedAt ?? reservation.CreatedAt
+                    });
+                    break;
+
+                case ReservationStatus.Cancelled:
+                    db.Notifications.Add(new Notification
+                    {
+                        UserId = reservation.ClientId,
+                        Type = NotificationType.ReservationCancelled,
+                        Title = "Rezervacija otkazana",
+                        Text = "Rezervacija " + shortNumber + " je otkazana. Razlog: " + reservation.CancellationReason,
+                        IsRead = false,
+                        CreatedAt = reservation.CancelledAt ?? reservation.CreatedAt
+                    });
+                    break;
+
+                case ReservationStatus.Confirmed:
+                    db.Notifications.Add(new Notification
+                    {
+                        UserId = reservation.ClientId,
+                        Type = NotificationType.ReservationConfirmed,
+                        Title = "Rezervacija potvrđena",
+                        Text = "Vaša rezervacija " + shortNumber + " je potvrđena.",
+                        IsRead = false,
+                        CreatedAt = reservation.ConfirmedAt ?? reservation.CreatedAt
+                    });
+                    break;
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedNewsAsync(DatabaseContext db)
+    {
+        if (await db.News.AnyAsync()) return;
+
+        var now = DateTime.UtcNow;
+        db.News.AddRange(
+            new News
+            {
+                Title = "Produženo radno vrijeme vikendom",
+                Text = "Od ovog mjeseca svi tereni rade do 22h i subotom i nedjeljom. " +
+                       "Termine možete rezervisati kroz aplikaciju kao i obično.",
+                PublishedAt = now.AddDays(-3),
+                ImageData = PlaceholderImage,
+                ImageContentType = "image/png",
+                CreatedAt = now.AddDays(-3)
+            },
+            new News
+            {
+                Title = "Novi padel tereni u Sarajevu",
+                Text = "Padel Arena Sarajevo dobila je dva nova terena. Rezervacije su otvorene.",
+                PublishedAt = now.AddDays(-10),
+                ImageData = PlaceholderImage,
+                ImageContentType = "image/png",
+                CreatedAt = now.AddDays(-10)
+            },
+            new News
+            {
+                Title = "Popust za jutarnje termine",
+                Text = "Termini prije 10h su 20% jeftiniji radnim danima tokom cijele sezone.",
+                PublishedAt = now.AddDays(-21),
+                ImageData = PlaceholderImage,
+                ImageContentType = "image/png",
+                CreatedAt = now.AddDays(-21)
+            });
 
         await db.SaveChangesAsync();
     }
