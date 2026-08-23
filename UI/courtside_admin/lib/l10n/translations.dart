@@ -112,6 +112,9 @@ const Map<String, String> _dict = {
   'Napomena': 'Note',
   'Zatvori': 'Close',
   'Označi kao plaćeno': 'Mark as paid',
+  'Potvrda': 'Confirmation',
+  'Označiti gotovinsku uplatu kao naplaćenu?': 'Mark the cash payment as collected?',
+  'Pokrenuti povrat sredstava za ovu rezervaciju?': 'Issue a refund for this reservation?',
   'Refundiraj': 'Refund',
   'Otkaži': 'Cancel',
   'Potvrdi': 'Confirm',
@@ -125,6 +128,12 @@ const Map<String, String> _dict = {
 
   // Reports
   'Izvještaj o rezervacijama': 'Reservations report',
+  'Odaberite period i centar, zatim izvještaj koji želite preuzeti.':
+      'Pick a period and centre, then the report you want to download.',
+  'Popunjenost terena': 'Court occupancy',
+  'Najtraženiji termini i popunjenost svakog terena u odnosu na radno vrijeme.':
+      "Most requested slots and each court's occupancy against its working hours.",
+  'Preuzmi PDF': 'Download PDF',
   'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.':
       'Summary by status, revenue, and a list of reservations for the selected period.',
   'Svi centri': 'All centers',
@@ -214,6 +223,10 @@ const Map<String, String> _dict = {
 
   'Pretraga sportskih centara...': 'Search sports centers...',
   'Dodaj sportski centar': 'Add sports center',
+  'Prvo dodajte sport i sportski centar u Referentnim podacima.':
+      'First add a sport and a sports center under Reference data.',
+  'Prvo dodajte državu.': 'First add a country.',
+  'Prvo dodajte grad.': 'First add a city.',
   'Nema sportskih centara.': 'No sports centers.',
   'Novi sportski centar': 'New sports center',
   'Uređivanje sportskog centra': 'Edit sports center',
@@ -224,6 +237,16 @@ const Map<String, String> _dict = {
   'Sportski centar je obrisan.': 'Sports center deleted.',
 
   // Backend errors (from CourtSide.Services BusinessException/NotFoundException messages)
+  'Sport se ne može obrisati jer postoje tereni koji ga koriste.':
+      'The sport cannot be deleted because courts are using it.',
+  'Grad se ne može obrisati jer postoje sportski centri koji ga koriste.':
+      'The city cannot be deleted because sports centers are using it.',
+  'Država se ne može obrisati jer postoje gradovi koji joj pripadaju.':
+      'The country cannot be deleted because cities belong to it.',
+  'Sportski centar se ne može obrisati jer postoje tereni koji mu pripadaju.':
+      'The sports center cannot be deleted because courts belong to it.',
+  'Teren se ne može obrisati jer ima rezervacije. Umjesto brisanja označite ga kao neaktivan.':
+      'The court cannot be deleted because it has reservations. Mark it inactive instead.',
   'Pogrešno korisničko ime ili lozinka.': 'Incorrect username or password.',
   'Korisničko ime je već zauzeto.': 'This username is already taken.',
   'Email adresa je već registrovana.': 'This email address is already registered.',

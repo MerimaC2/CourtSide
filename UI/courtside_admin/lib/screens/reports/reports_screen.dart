@@ -62,19 +62,29 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
 
-  Future<void> _generate() async {
+  /// Downloads one of the two reports; [occupancy] picks which. Both share the
+  /// same period/centre filters and the currently selected UI language.
+  Future<void> _generate({bool occupancy = false}) async {
     setState(() => _generating = true);
     final reportProvider = context.read<ReportProvider>();
     final language = context.read<LocaleProvider>().language == AppLanguage.en ? 'en' : 'bs';
     try {
-      final bytes = await reportProvider.getReservationsReport(
-        dateFrom: _dateFrom,
-        dateTo: _dateTo,
-        sportCenterId: _sportCenterId,
-        language: language,
-      );
+      final bytes = occupancy
+          ? await reportProvider.getOccupancyReport(
+              dateFrom: _dateFrom,
+              dateTo: _dateTo,
+              sportCenterId: _sportCenterId,
+              language: language,
+            )
+          : await reportProvider.getReservationsReport(
+              dateFrom: _dateFrom,
+              dateTo: _dateTo,
+              sportCenterId: _sportCenterId,
+              language: language,
+            );
+      final prefix = occupancy ? 'popunjenost' : 'rezervacije';
       final suggestedName =
-          'rezervacije_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
+          '${prefix}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       final location = await getSaveLocation(
         suggestedName: suggestedName,
         acceptedTypeGroups: const [
@@ -129,11 +139,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(tr(context, 'Izvještaj o rezervacijama'),
+          Text(tr(context, 'Izvještaji'),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(
-            tr(context, 'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.'),
+            tr(context, 'Odaberite period i centar, zatim izvještaj koji želite preuzeti.'),
             style: TextStyle(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 24),
@@ -174,18 +184,66 @@ class _ReportsScreenState extends State<ReportsScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          SizedBox(
-            width: 260,
-            height: 48,
-            child: _generating
-                ? const Center(child: CircularProgressIndicator())
-                : ElevatedButton.icon(
-                    onPressed: _generate,
-                    icon: const Icon(Icons.picture_as_pdf_outlined),
-                    label: Text(tr(context, 'Generiši i sačuvaj PDF')),
-                  ),
+          _reportCard(
+            title: tr(context, 'Izvještaj o rezervacijama'),
+            description: tr(context,
+                'Sažetak po statusu, ostvareni prihod i pregled rezervacija za odabrani period.'),
+            onGenerate: () => _generate(),
+          ),
+          const SizedBox(height: 12),
+          _reportCard(
+            title: tr(context, 'Popunjenost terena'),
+            description: tr(context,
+                'Najtraženiji termini i popunjenost svakog terena u odnosu na radno vrijeme.'),
+            onGenerate: () => _generate(occupancy: true),
           ),
         ],
+      ),
+    );
+  }
+
+  /// One downloadable report: name, what it contains and its download button.
+  Widget _reportCard({
+    required String title,
+    required String description,
+    required VoidCallback onGenerate,
+  }) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.picture_as_pdf_outlined, color: kPrimaryColor, size: 32),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  const SizedBox(height: 2),
+                  Text(description, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            SizedBox(
+              width: 190,
+              height: 44,
+              child: _generating
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton.icon(
+                      onPressed: onGenerate,
+                      icon: const Icon(Icons.download_outlined, size: 18),
+                      label: Text(tr(context, 'Preuzmi PDF')),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

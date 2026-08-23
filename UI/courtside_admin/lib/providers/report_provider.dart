@@ -24,6 +24,26 @@ class ReportProvider {
     DateTime? dateTo,
     int? sportCenterId,
     String language = 'bs',
+  }) =>
+      _getReport('reservations',
+          dateFrom: dateFrom, dateTo: dateTo, sportCenterId: sportCenterId, language: language);
+
+  /// Court occupancy report: most requested slots and occupancy per court.
+  Future<Uint8List> getOccupancyReport({
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int? sportCenterId,
+    String language = 'bs',
+  }) =>
+      _getReport('occupancy',
+          dateFrom: dateFrom, dateTo: dateTo, sportCenterId: sportCenterId, language: language);
+
+  Future<Uint8List> _getReport(
+    String report, {
+    DateTime? dateFrom,
+    DateTime? dateTo,
+    int? sportCenterId,
+    String language = 'bs',
   }) async {
     final params = <String, String>{
       if (dateFrom != null) 'dateFrom': formatApiDate(dateFrom),
@@ -31,7 +51,7 @@ class ReportProvider {
       if (sportCenterId != null) 'sportCenterId': sportCenterId.toString(),
       'language': language,
     };
-    final uri = Uri.parse('${AppConfig.apiBase}reports/reservations')
+    final uri = Uri.parse('${AppConfig.apiBase}reports/$report')
         .replace(queryParameters: params.isEmpty ? null : params);
     final headers = <String, String>{};
     if (Authorization.token != null && Authorization.token!.isNotEmpty) {
