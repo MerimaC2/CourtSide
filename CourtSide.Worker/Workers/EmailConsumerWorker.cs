@@ -62,24 +62,49 @@ public class EmailConsumerWorker : BackgroundService
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.Received += async (_, ea) =>
         {
-            try
-            {
-                var json = Encoding.UTF8.GetString(ea.Body.ToArray());
-                var message = JsonSerializer.Deserialize<EmailMessage>(json);
-                if (message is not null)
-                    await _email.SendAsync(message);
+            var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+            var message = JsonSerializer.Deserialize<EmailMessage>(json);
 
-                _channel!.BasicAck(ea.DeliveryTag, multiple: false);
-            }
-            catch (Exception ex)
+            if (message is not null && !await TrySendWithRetryAsync(message))
             {
-                _logger.LogError(ex, "Greška pri obradi email poruke.");
                 _channel!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
+                return;
             }
+
+            _channel!.BasicAck(ea.DeliveryTag, multiple: false);
         };
 
         _channel.BasicConsume(_rabbit.Queue, autoAck: false, consumer);
         _logger.LogInformation("Worker sluša RabbitMQ red '{Queue}'.", _rabbit.Queue);
+    }
+
+    /// <summary>Retries a failed send with exponential backoff (1s, 2s, 4s, 8s) before giving up.</summary>
+    private async Task<bool> TrySendWithRetryAsync(EmailMessage message)
+    {
+        var delay = TimeSpan.FromSeconds(1);
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                await _email.SendAsync(message);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                if (attempt == 5)
+                {
+                    _logger.LogError(ex, "Slanje email poruke nije uspjelo ni nakon {Attempts} pokušaja.", attempt);
+                    return false;
+                }
+
+                _logger.LogWarning(ex, "Slanje email poruke nije uspjelo (pokušaj {Attempt}). Ponovni pokušaj za {Delay}s.",
+                    attempt, delay.TotalSeconds);
+                await Task.Delay(delay);
+                delay *= 2;
+            }
+        }
+
+        return false;
     }
 
     public override void Dispose()
