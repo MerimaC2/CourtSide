@@ -33,6 +33,12 @@ public class ReportService : IReportService
     {
         var labels = ReportLabels.For(language);
 
+        // Filtered reports name the centre in the header; an unfiltered one covers all centres.
+        var centerName = sportCenterId.HasValue
+            ? await _db.SportCenters.Where(s => s.Id == sportCenterId.Value)
+                .Select(s => s.Name).FirstOrDefaultAsync()
+            : null;
+
         var query = _db.Reservations
             .Include(r => r.Court).ThenInclude(c => c.SportCenter)
             .Include(r => r.Client)
@@ -90,6 +96,8 @@ public class ReportService : IReportService
                         });
                         row.ConstantItem(180).AlignRight().Column(c =>
                         {
+                            if (centerName != null)
+                                c.Item().Text($"{labels.Centre}: {centerName}").SemiBold();
                             c.Item().Text($"{labels.Period}: {periodText}");
                             c.Item().Text($"{labels.GeneratedAt}: {generatedAt}").FontColor("#777777");
                         });
@@ -213,6 +221,12 @@ public class ReportService : IReportService
     {
         var labels = ReportLabels.For(language);
 
+        // Filtered reports name the centre in the header; an unfiltered one covers all centres.
+        var centerName = sportCenterId.HasValue
+            ? await _db.SportCenters.Where(s => s.Id == sportCenterId.Value)
+                .Select(s => s.Name).FirstOrDefaultAsync()
+            : null;
+
         // Occupancy needs a bounded period so available hours can be computed;
         // when none is given the report covers the last 30 days.
         var to = dateTo ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -287,6 +301,8 @@ public class ReportService : IReportService
                         });
                         row.ConstantItem(180).AlignRight().Column(c =>
                         {
+                            if (centerName != null)
+                                c.Item().Text($"{labels.Centre}: {centerName}").SemiBold();
                             c.Item().Text($"{labels.Period}: {periodText}");
                             c.Item().Text($"{labels.GeneratedAt}: {generatedAt}").FontColor("#777777");
                         });
