@@ -93,6 +93,10 @@ const Map<String, String> _dict = {
   'Razlog blokade': 'Block reason',
 
   // Reservations
+  'Ukupno': 'Total',
+  'Stranica': 'Page',
+  'Prethodna stranica': 'Previous page',
+  'Sljedeća stranica': 'Next page',
   'Pretraga (broj, klijent)...': 'Search (number, client)...',
   'Svi statusi': 'All statuses',
   'Od datuma': 'From date',

@@ -39,6 +39,10 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   String? _error;
   Timer? _pollTimer;
   bool _fetching = false;
+  int _page = 1;
+  int _totalCount = 0;
+
+  static const _pageSize = 10;
 
   @override
   void initState() {
@@ -78,6 +82,13 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
 
   Future<void> _load() => _fetch();
 
+  /// Filter changes restart from the first page — the old page number is
+  /// meaningless against a different result set.
+  Future<void> _resetAndLoad() {
+    _page = 1;
+    return _fetch();
+  }
+
   /// A [silent] fetch is the background poll: it updates the list in place, without
   /// the loading spinner, and keeps whatever is already on screen if the request
   /// fails — a dropped poll shouldn't replace the table with an error.
@@ -93,8 +104,8 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     final reservationProvider = context.read<ReservationProvider>();
     try {
       final filter = <String, dynamic>{
-        'page': 1,
-        'pageSize': 200,
+        'page': _page,
+        'pageSize': _pageSize,
         if (_searchController.text.trim().isNotEmpty)
           'searchTerm': _searchController.text.trim(),
         if (_status != null) 'status': _status,
@@ -103,8 +114,16 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       };
       final result = await reservationProvider.get(filter: filter);
       if (!mounted) return;
-      setState(() => _reservations = result.result
-        ..sort((a, b) => b.date.compareTo(a.date)));
+      if (result.result.isEmpty && _page > 1) {
+        // The requested page no longer exists under the current filter.
+        _page = 1;
+        _fetching = false;
+        return _fetch(silent: silent);
+      }
+      setState(() {
+        _reservations = result.result;
+        _totalCount = result.count;
+      });
     } catch (e) {
       if (mounted && !silent) {
         final message = e.toString().replaceFirst('Exception: ', '');
@@ -132,7 +151,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         _dateTo = picked;
       }
     });
-    _load();
+    _resetAndLoad();
   }
 
   void _clearFilters() {
@@ -142,7 +161,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       _dateFrom = null;
       _dateTo = null;
     });
-    _load();
+    _resetAndLoad();
   }
 
   Future<void> _openDetail(Reservation reservation) async {
@@ -163,6 +182,44 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           _buildFilters(),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
+          if (!_loading && _error == null && _totalCount > 0) _buildPager(),
+        ],
+      ),
+    );
+  }
+
+  /// Page navigation under the table: total count left, page controls right.
+  /// The background poll refreshes whichever page is open.
+  Widget _buildPager() {
+    final totalPages = (_totalCount + _pageSize - 1) ~/ _pageSize;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Text('${tr(context, 'Ukupno')}: $_totalCount',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          const Spacer(),
+          IconButton(
+            tooltip: tr(context, 'Prethodna stranica'),
+            icon: const Icon(Icons.chevron_left),
+            onPressed: _page > 1
+                ? () {
+                    setState(() => _page--);
+                    _fetch();
+                  }
+                : null,
+          ),
+          Text('${tr(context, 'Stranica')} $_page / $totalPages'),
+          IconButton(
+            tooltip: tr(context, 'Sljedeća stranica'),
+            icon: const Icon(Icons.chevron_right),
+            onPressed: _page < totalPages
+                ? () {
+                    setState(() => _page++);
+                    _fetch();
+                  }
+                : null,
+          ),
         ],
       ),
     );
@@ -181,9 +238,9 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             decoration: InputDecoration(
               hintText: tr(context, 'Pretraga (broj, klijent)...'),
               prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _load),
+              suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _resetAndLoad),
             ),
-            onSubmitted: (_) => _load(),
+            onSubmitted: (_) => _resetAndLoad(),
           ),
         ),
         SizedBox(
@@ -199,7 +256,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             ],
             onChanged: (v) {
               setState(() => _status = v);
-              _load();
+              _resetAndLoad();
             },
           ),
         ),
