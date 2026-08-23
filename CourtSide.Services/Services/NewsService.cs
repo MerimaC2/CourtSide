@@ -31,10 +31,11 @@ public class NewsService : BaseCrudService<News, NewsDto, NewsUpsertDto, NewsSea
 
         // An announcement scheduled for a future date must not reach clients before then.
         // Administrators keep seeing scheduled items so they can review and edit them.
+        // The publish moment is a calendar date, so visibility flips at the start of that day.
         if (!_currentUser.IsAdmin)
         {
-            var now = DateTime.UtcNow;
-            query = query.Where(x => x.PublishedAt <= now);
+            var today = DateTime.UtcNow.Date;
+            query = query.Where(x => x.PublishedAt.Date <= today);
         }
 
         return query.OrderByDescending(x => x.PublishedAt);
@@ -42,13 +43,13 @@ public class NewsService : BaseCrudService<News, NewsDto, NewsUpsertDto, NewsSea
 
     protected override Task BeforeInsertAsync(NewsUpsertDto dto, News entity)
     {
-        entity.PublishedAt = dto.PublishedAt ?? DateTime.UtcNow;
+        entity.PublishedAt = (dto.PublishedAt ?? DateTime.UtcNow).Date;
         return Task.CompletedTask;
     }
 
     protected override Task BeforeUpdateAsync(NewsUpsertDto dto, News entity)
     {
-        entity.PublishedAt = dto.PublishedAt ?? entity.PublishedAt;
+        entity.PublishedAt = dto.PublishedAt?.Date ?? entity.PublishedAt;
         return Task.CompletedTask;
     }
 
