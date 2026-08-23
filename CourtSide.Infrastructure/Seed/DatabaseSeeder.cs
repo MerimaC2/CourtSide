@@ -12,11 +12,6 @@ namespace CourtSide.Infrastructure.Seed;
 /// <summary>Seeds roles, test users and reference/domain data (idempotent) at startup.</summary>
 public static class DatabaseSeeder
 {
-    // 1x1 placeholder PNG used wherever a seeded record needs an image.
-    private static readonly byte[] PlaceholderImage =
-        Convert.FromBase64String(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
-
     public static async Task SeedAsync(IServiceProvider services)
     {
         var db = services.GetRequiredService<DatabaseContext>();
@@ -98,10 +93,10 @@ public static class DatabaseSeeder
         };
 
         db.Courts.AddRange(
-            CreateCourt("Futsal teren 1", futsal, centerMo, 40m, now),
-            CreateCourt("Teniski teren 1", tenis, centerMo, 25m, now),
-            CreateCourt("Padel teren A", padel, centerSa, 30m, now),
-            CreateCourt("Badminton teren 1", badminton, centerSa, 20m, now));
+            CreateCourt("Futsal teren 1", futsal, centerMo, 40m, SeedImages.Futsal, now),
+            CreateCourt("Teniski teren 1", tenis, centerMo, 25m, SeedImages.Tenis, now),
+            CreateCourt("Padel teren A", padel, centerSa, 30m, SeedImages.Padel, now),
+            CreateCourt("Badminton teren 1", badminton, centerSa, 20m, SeedImages.Badminton, now));
 
         await db.SaveChangesAsync();
     }
@@ -308,8 +303,8 @@ public static class DatabaseSeeder
                 Text = "Od ovog mjeseca svi tereni rade do 22h i subotom i nedjeljom. " +
                        "Termine možete rezervisati kroz aplikaciju kao i obično.",
                 PublishedAt = now.AddDays(-3),
-                ImageData = PlaceholderImage,
-                ImageContentType = "image/png",
+                ImageData = SeedImages.News,
+                ImageContentType = "image/jpeg",
                 CreatedAt = now.AddDays(-3)
             },
             new News
@@ -317,8 +312,8 @@ public static class DatabaseSeeder
                 Title = "Novi padel tereni u Sarajevu",
                 Text = "Padel Arena Sarajevo dobila je dva nova terena. Rezervacije su otvorene.",
                 PublishedAt = now.AddDays(-10),
-                ImageData = PlaceholderImage,
-                ImageContentType = "image/png",
+                ImageData = SeedImages.Padel,
+                ImageContentType = "image/jpeg",
                 CreatedAt = now.AddDays(-10)
             },
             new News
@@ -326,15 +321,16 @@ public static class DatabaseSeeder
                 Title = "Popust za jutarnje termine",
                 Text = "Termini prije 10h su 20% jeftiniji radnim danima tokom cijele sezone.",
                 PublishedAt = now.AddDays(-21),
-                ImageData = PlaceholderImage,
-                ImageContentType = "image/png",
+                ImageData = SeedImages.Tenis,
+                ImageContentType = "image/jpeg",
                 CreatedAt = now.AddDays(-21)
             });
 
         await db.SaveChangesAsync();
     }
 
-    private static Court CreateCourt(string name, Sport sport, SportCenter center, decimal price, DateTime now)
+    private static Court CreateCourt(string name, Sport sport, SportCenter center, decimal price,
+        byte[] photo, DateTime now)
     {
         var court = new Court
         {
@@ -348,8 +344,8 @@ public static class DatabaseSeeder
 
         court.Images.Add(new CourtImage
         {
-            ImageData = PlaceholderImage,
-            ContentType = "image/png",
+            ImageData = photo,
+            ContentType = "image/jpeg",
             IsPrimary = true,
             CreatedAt = now
         });
