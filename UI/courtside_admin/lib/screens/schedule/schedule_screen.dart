@@ -9,6 +9,7 @@ import '../../providers/availability_block_provider.dart';
 import '../../providers/availability_provider.dart';
 import '../../providers/court_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/dialog_header.dart';
 
 class ScheduleScreen extends StatefulWidget {
   /// Whether this is the currently selected section. The admin shell keeps every
@@ -145,7 +146,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${tr(ctx, 'Blokiraj termin')} ${slot.label}'),
+        title: dialogHeader(ctx, '${tr(ctx, 'Blokiraj termin')} ${slot.label}'),
         content: TextField(
           controller: reasonController,
           decoration: InputDecoration(labelText: tr(ctx, 'Razlog (opciono)')),

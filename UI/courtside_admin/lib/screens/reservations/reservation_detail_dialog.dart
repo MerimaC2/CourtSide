@@ -7,6 +7,7 @@ import '../../models/reservation.dart';
 import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/dialog_header.dart';
 
 /// Shows full reservation details with admin actions (confirm/cancel).
 /// Pops with `true` if the reservation was changed, so the caller can refresh its list.
@@ -116,7 +117,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
     final reason = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr(ctx, 'Otkazivanje rezervacije')),
+        title: dialogHeader(ctx, tr(ctx, 'Otkazivanje rezervacije')),
         content: TextField(
           controller: reasonController,
           decoration: InputDecoration(labelText: tr(ctx, 'Razlog otkazivanja')),
