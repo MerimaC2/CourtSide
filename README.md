@@ -73,7 +73,9 @@ UI/courtside_mobile       Flutter mobilna (korisnik)
 
 ### Preduslovi
 - .NET 9 SDK, Docker Desktop, Flutter SDK, Android SDK + AVD, JDK 17
-- Kopirati `.env.example` → `.env` i popuniti vrijednosti (vidi `.env.example`)
+- **Konfiguracija:** raspakovati `.env-tajne.zip` u root repozitorija (nastaje `.env` fajl;
+  šifra arhive je dostavljena uz predaju rada). Alternativno: kopirati `.env.example` → `.env`
+  i popuniti vlastite vrijednosti.
 
 ### Backend (Docker)
 ```bash
