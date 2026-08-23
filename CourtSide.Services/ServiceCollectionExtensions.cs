@@ -29,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<ITokenRevocationService, TokenRevocationService>();
 
         // Domain services
         services.AddScoped<ICountryService, CountryService>();
@@ -37,10 +39,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISportCenterService, SportCenterService>();
         services.AddScoped<ICourtService, CourtService>();
         services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<INewsService, NewsService>();
+        services.AddScoped<ICourtReviewService, CourtReviewService>();
         services.AddScoped<IAvailabilityService, AvailabilityService>();
         services.AddScoped<IReservationService, ReservationService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IReportService, ReportService>();
+
+        // Closes out reservations whose slot has elapsed (Confirmed -> Completed).
+        services.AddHostedService<ReservationCompletionService>();
 
         // Recommender: singleton model cache, scoped query service, background re-trainer.
         services.AddSingleton<IRecommenderModel, RecommenderModel>();
