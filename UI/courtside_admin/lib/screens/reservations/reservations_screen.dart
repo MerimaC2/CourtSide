@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,6 +10,10 @@ import '../../utils/util.dart';
 import 'reservation_detail_dialog.dart';
 
 const _statuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed'];
+
+/// How often the visible list re-queries the API. Clients book from the mobile app
+/// at any time, so the tab keeps itself current while the administrator is on it.
+const _pollInterval = Duration(seconds: 15);
 
 class ReservationsScreen extends StatefulWidget {
   /// Whether this screen is the currently selected tab. The admin shell keeps
@@ -31,30 +37,59 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   DateTime? _dateTo;
   bool _loading = true;
   String? _error;
+  Timer? _pollTimer;
+  bool _fetching = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    if (widget.isActive) _startPolling();
   }
 
   @override
   void didUpdateWidget(covariant ReservationsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _load();
+    if (widget.isActive && !oldWidget.isActive) {
+      _load();
+      _startPolling();
+    } else if (!widget.isActive && oldWidget.isActive) {
+      _stopPolling();
+    }
   }
 
   @override
   void dispose() {
+    _stopPolling();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  /// Polling only runs while this is the visible tab, so background sections don't
+  /// keep querying the API.
+  void _startPolling() {
+    _pollTimer ??= Timer.periodic(_pollInterval, (_) => _fetch(silent: true));
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _load() => _fetch();
+
+  /// A [silent] fetch is the background poll: it updates the list in place, without
+  /// the loading spinner, and keeps whatever is already on screen if the request
+  /// fails — a dropped poll shouldn't replace the table with an error.
+  Future<void> _fetch({bool silent = false}) async {
+    if (!mounted || _fetching) return;
+    _fetching = true;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     final reservationProvider = context.read<ReservationProvider>();
     try {
       final filter = <String, dynamic>{
@@ -71,12 +106,13 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       setState(() => _reservations = result.result
         ..sort((a, b) => b.date.compareTo(a.date)));
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         final message = e.toString().replaceFirst('Exception: ', '');
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      _fetching = false;
+      if (mounted && !silent) setState(() => _loading = false);
     }
   }
 
@@ -154,6 +190,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           width: 180,
           child: DropdownButtonFormField<String?>(
             initialValue: _status,
+            isExpanded: true,
             decoration: const InputDecoration(labelText: 'Status'),
             items: [
               DropdownMenuItem<String?>(value: null, child: Text(tr(context, 'Svi statusi'))),

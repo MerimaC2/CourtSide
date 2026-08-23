@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../l10n/translations.dart';
+import '../../providers/auth_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../../widgets/language_toggle.dart';
 import '../auth/login_screen.dart';
 import '../courts/courts_screen.dart';
+import '../news/news_screen.dart';
+import '../reference/reference_data_screen.dart';
 import '../reports/reports_screen.dart';
 import '../reservations/reservations_screen.dart';
 import '../schedule/schedule_screen.dart';
@@ -25,10 +29,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         _Section(tr(context, 'Raspored'), Icons.calendar_month_outlined),
         _Section(tr(context, 'Rezervacije'), Icons.event_note_outlined),
         _Section(tr(context, 'Izvještaji'), Icons.picture_as_pdf_outlined),
+        _Section(tr(context, 'Obavijesti'), Icons.campaign_outlined),
+        _Section(tr(context, 'Referentni podaci'), Icons.tune_outlined),
       ];
 
-  void _logout() {
-    Authorization.clear();
+  Future<void> _logout() async {
+    await context.read<AuthProvider>().signOut();
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
@@ -73,10 +80,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             child: IndexedStack(
               index: _selectedIndex,
               children: [
-                const CourtsScreen(),
-                const ScheduleScreen(),
+                CourtsScreen(isActive: _selectedIndex == 0),
+                ScheduleScreen(isActive: _selectedIndex == 1),
                 ReservationsScreen(isActive: _selectedIndex == 2),
                 const ReportsScreen(),
+                const NewsScreen(),
+                ReferenceDataScreen(isActive: _selectedIndex == 5),
               ],
             ),
           ),

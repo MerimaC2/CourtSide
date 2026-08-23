@@ -157,10 +157,6 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(tr(context, 'Zatvori')),
-        ),
         if (_busy)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
@@ -168,8 +164,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
           )
         else ...[
           // Payment actions (mark paid / refund) grouped separately from the
-          // reservation-status actions below, with the primary action (Potvrdi)
-          // last so it reads as the dialog's main call to action.
+          // reservation-status actions that follow them.
           if (_payment != null &&
               _payment!.method == 'Cash' &&
               _payment!.status == 'Pending')
@@ -193,7 +188,14 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
             ),
           if (r.status == 'Pending')
             FilledButton(onPressed: _confirm, child: Text(tr(context, 'Potvrdi'))),
+          const SizedBox(width: 16),
         ],
+        // Closing the dialog is always the right-most action, so it keeps the same
+        // position no matter which status-dependent actions are shown next to it.
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(tr(context, 'Zatvori')),
+        ),
       ],
     );
   }

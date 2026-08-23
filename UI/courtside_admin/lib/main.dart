@@ -5,7 +5,9 @@ import 'providers/auth_provider.dart';
 import 'providers/availability_block_provider.dart';
 import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
+import 'providers/country_provider.dart';
 import 'providers/court_provider.dart';
+import 'providers/news_provider.dart';
 import 'providers/payment_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/reservation_provider.dart';
@@ -33,12 +35,14 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => CourtProvider()),
         ChangeNotifierProvider(create: (_) => SportProvider()),
+        ChangeNotifierProvider(create: (_) => CountryProvider()),
         ChangeNotifierProvider(create: (_) => CityProvider()),
         ChangeNotifierProvider(create: (_) => SportCenterProvider()),
         ChangeNotifierProvider(create: (_) => AvailabilityProvider()),
         ChangeNotifierProvider(create: (_) => AvailabilityBlockProvider()),
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
+        ChangeNotifierProvider(create: (_) => NewsProvider()),
         Provider(create: (_) => ReportProvider()),
       ],
       child: const CourtSideAdminApp(),

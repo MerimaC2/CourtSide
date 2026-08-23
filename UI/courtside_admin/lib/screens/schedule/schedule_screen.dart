@@ -11,7 +11,12 @@ import '../../providers/court_provider.dart';
 import '../../utils/util.dart';
 
 class ScheduleScreen extends StatefulWidget {
-  const ScheduleScreen({super.key});
+  /// Whether this is the currently selected section. The admin shell keeps every
+  /// section alive in an [IndexedStack], so the court list is reloaded whenever the
+  /// section becomes visible again — courts added elsewhere appear right away.
+  final bool isActive;
+
+  const ScheduleScreen({super.key, this.isActive = true});
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -31,6 +36,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void initState() {
     super.initState();
     _loadCourts();
+  }
+
+  @override
+  void didUpdateWidget(covariant ScheduleScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _refreshCourts();
   }
 
   Future<void> _loadCourts() async {
@@ -81,17 +92,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
   }
 
+  /// Reloads the court list, keeping the current selection when that court still
+  /// exists. The schedule is reloaded too, since blocks and reservations for the
+  /// selected day may have changed while another section was open.
   Future<void> _refreshCourts() async {
     try {
       final result =
           await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': 200});
       if (!mounted) return;
+      final courts = result.result;
       setState(() {
-        _courts = result.result;
-        if (_courtId != null && !_courts.any((c) => c.id == _courtId)) {
-          _courtId = _courts.isNotEmpty ? _courts.first.id : null;
+        _courts = courts;
+        if (_courtId == null || !courts.any((c) => c.id == _courtId)) {
+          _courtId = courts.isNotEmpty ? courts.first.id : null;
         }
       });
+      if (_courtId != null) await _loadSchedule();
     } catch (_) {
       // Keep the existing list if the refresh fails; the dropdown just stays as-is.
     }
@@ -209,8 +225,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               Expanded(
                 child: DropdownButtonFormField<int>(
                   initialValue: _courtId,
+                  isExpanded: true,
                   decoration: InputDecoration(labelText: tr(context, 'Teren')),
-                  onTap: _refreshCourts,
                   items: _courts
                       .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                       .toList(),
