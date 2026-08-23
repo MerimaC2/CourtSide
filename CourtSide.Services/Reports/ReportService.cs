@@ -13,6 +13,10 @@ public interface IReportService
     /// <summary>Builds a reservations + revenue PDF report for the given period/center (admin).</summary>
     Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
         string? language = null);
+
+    /// <summary>Builds a court occupancy PDF (most requested slots, occupancy per court).</summary>
+    Task<byte[]> OccupancyPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
+        string? language = null);
 }
 
 /// <summary>Generates PDF reports with QuestPDF.</summary>
@@ -187,6 +191,172 @@ public class ReportService : IReportService
                             }
                             if (reservations.Count == 0)
                                 table.Cell().ColumnSpan(7).Element(e => e.Padding(4)).Text(labels.NoReservationsForPeriod).Italic();
+                        });
+                    });
+                });
+
+                page.Footer().AlignCenter().Text(text =>
+                {
+                    text.Span(labels.Page);
+                    text.CurrentPageNumber();
+                    text.Span(" / ");
+                    text.TotalPages();
+                });
+            });
+        });
+
+        return document.GeneratePdf();
+    }
+
+    public async Task<byte[]> OccupancyPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
+        string? language = null)
+    {
+        var labels = ReportLabels.For(language);
+
+        // Occupancy needs a bounded period so available hours can be computed;
+        // when none is given the report covers the last 30 days.
+        var to = dateTo ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var from = dateFrom ?? to.AddDays(-29);
+
+        var courtsQuery = _db.Courts
+            .Include(c => c.SportCenter)
+            .Include(c => c.WorkingHours)
+            .AsQueryable();
+        if (sportCenterId.HasValue)
+            courtsQuery = courtsQuery.Where(c => c.SportCenterId == sportCenterId.Value);
+        var courts = await courtsQuery.OrderBy(c => c.Name).ToListAsync();
+
+        var reservations = await _db.Reservations
+            .Where(r => r.Date >= from && r.Date <= to && r.Status != ReservationStatus.Cancelled)
+            .Where(r => !sportCenterId.HasValue || r.Court.SportCenterId == sportCenterId.Value)
+            .Select(r => new { r.CourtId, r.StartTime, r.EndTime })
+            .ToListAsync();
+
+        var topSlots = reservations
+            .GroupBy(r => r.StartTime)
+            .Select(g => new { Start = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count).ThenBy(x => x.Start)
+            .Take(10)
+            .ToList();
+
+        // How many times each day of the week occurs in the period, so a court's
+        // weekly opening hours scale to the whole period.
+        var daysPerDayOfWeek = new int[7];
+        for (var day = from; day <= to; day = day.AddDays(1))
+            daysPerDayOfWeek[(int)day.DayOfWeek]++;
+
+        var occupancyRows = courts.Select(court =>
+        {
+            var available = court.WorkingHours.Sum(w =>
+                daysPerDayOfWeek[(int)w.DayOfWeek] * (w.CloseTime - w.OpenTime).TotalHours);
+            var reserved = reservations
+                .Where(r => r.CourtId == court.Id)
+                .Sum(r => (r.EndTime - r.StartTime).TotalHours);
+            return new
+            {
+                court.Name,
+                Center = court.SportCenter.Name,
+                Count = reservations.Count(r => r.CourtId == court.Id),
+                Reserved = reserved,
+                Available = available,
+                Occupancy = available > 0 ? reserved / available : 0
+            };
+        })
+        .OrderByDescending(x => x.Occupancy).ThenByDescending(x => x.Count)
+        .ToList();
+
+        var periodText = $"{from:dd.MM.yyyy} – {to:dd.MM.yyyy}";
+        var generatedAt = DateTime.UtcNow.ToString("dd.MM.yyyy HH:mm 'UTC'");
+
+        var document = Document.Create(container =>
+        {
+            container.Page(page =>
+            {
+                page.Size(PageSizes.A4);
+                page.Margin(28);
+                page.DefaultTextStyle(x => x.FontSize(10).FontColor("#222222"));
+
+                page.Header().Column(header =>
+                {
+                    header.Item().Row(row =>
+                    {
+                        row.RelativeItem().Column(c =>
+                        {
+                            c.Item().Text("CourtSide").Bold().FontSize(20).FontColor("#1A5276");
+                            c.Item().Text(labels.OccupancySubtitle).FontSize(12).FontColor("#555555");
+                        });
+                        row.ConstantItem(180).AlignRight().Column(c =>
+                        {
+                            c.Item().Text($"{labels.Period}: {periodText}");
+                            c.Item().Text($"{labels.GeneratedAt}: {generatedAt}").FontColor("#777777");
+                        });
+                    });
+                    header.Item().PaddingTop(6).LineHorizontal(1).LineColor("#1A5276");
+                });
+
+                page.Content().PaddingVertical(10).Column(content =>
+                {
+                    content.Spacing(14);
+
+                    content.Item().Column(c =>
+                    {
+                        c.Item().Text(labels.TopSlots).Bold().FontSize(13);
+                        c.Item().PaddingTop(4).Table(table =>
+                        {
+                            table.ColumnsDefinition(cols =>
+                            {
+                                cols.RelativeColumn(2);
+                                cols.RelativeColumn(2);
+                            });
+                            table.Header(h =>
+                            {
+                                HeaderCell(h.Cell(), labels.TimeSlot);
+                                HeaderCell(h.Cell(), labels.BookingCount);
+                            });
+                            foreach (var slot in topSlots)
+                            {
+                                BodyCell(table.Cell(), $"{slot.Start:HH\\:mm} – {slot.Start.AddHours(1):HH\\:mm}");
+                                BodyCell(table.Cell(), slot.Count.ToString());
+                            }
+                            if (topSlots.Count == 0)
+                                table.Cell().ColumnSpan(2).Element(e => e.Padding(4)).Text(labels.NoDataForPeriod).Italic();
+                        });
+                    });
+
+                    content.Item().Column(c =>
+                    {
+                        c.Item().Text(labels.OccupancyByCourt).Bold().FontSize(13);
+                        c.Item().PaddingTop(4).Table(table =>
+                        {
+                            table.ColumnsDefinition(cols =>
+                            {
+                                cols.RelativeColumn(3);
+                                cols.RelativeColumn(3);
+                                cols.RelativeColumn(2);
+                                cols.RelativeColumn(2);
+                                cols.RelativeColumn(2);
+                                cols.RelativeColumn(2);
+                            });
+                            table.Header(h =>
+                            {
+                                HeaderCell(h.Cell(), labels.Court);
+                                HeaderCell(h.Cell(), labels.Centre);
+                                HeaderCell(h.Cell(), labels.BookingCount);
+                                HeaderCell(h.Cell(), labels.ReservedHours);
+                                HeaderCell(h.Cell(), labels.AvailableHours);
+                                HeaderCell(h.Cell(), labels.OccupancyPercent);
+                            });
+                            foreach (var row in occupancyRows)
+                            {
+                                BodyCell(table.Cell(), row.Name);
+                                BodyCell(table.Cell(), row.Center);
+                                BodyCell(table.Cell(), row.Count.ToString());
+                                BodyCell(table.Cell(), $"{row.Reserved:0.#}");
+                                BodyCell(table.Cell(), $"{row.Available:0.#}");
+                                BodyCell(table.Cell(), $"{row.Occupancy:P0}");
+                            }
+                            if (occupancyRows.Count == 0)
+                                table.Cell().ColumnSpan(6).Element(e => e.Padding(4)).Text(labels.NoDataForPeriod).Italic();
                         });
                     });
                 });

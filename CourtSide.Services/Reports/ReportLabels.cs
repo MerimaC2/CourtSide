@@ -38,6 +38,15 @@ public sealed class ReportLabels
     public required string No { get; init; }
     public required string NoReservationsForPeriod { get; init; }
 
+    public required string OccupancySubtitle { get; init; }
+    public required string TopSlots { get; init; }
+    public required string TimeSlot { get; init; }
+    public required string BookingCount { get; init; }
+    public required string OccupancyByCourt { get; init; }
+    public required string ReservedHours { get; init; }
+    public required string AvailableHours { get; init; }
+    public required string OccupancyPercent { get; init; }
+
     public required string Page { get; init; }
     public required IReadOnlyDictionary<ReservationStatus, string> Statuses { get; init; }
 
@@ -71,6 +80,14 @@ public sealed class ReportLabels
         Yes = "Da",
         No = "Ne",
         NoReservationsForPeriod = "Nema rezervacija za period.",
+        OccupancySubtitle = "Izvještaj o popunjenosti terena",
+        TopSlots = "Najtraženiji termini",
+        TimeSlot = "Termin",
+        BookingCount = "Broj rezervacija",
+        OccupancyByCourt = "Popunjenost po terenu",
+        ReservedHours = "Rezervisani sati",
+        AvailableHours = "Dostupni sati",
+        OccupancyPercent = "Popunjenost",
         Page = "Strana ",
         Statuses = new Dictionary<ReservationStatus, string>
         {
@@ -108,6 +125,14 @@ public sealed class ReportLabels
         Yes = "Yes",
         No = "No",
         NoReservationsForPeriod = "No reservations for this period.",
+        OccupancySubtitle = "Court occupancy report",
+        TopSlots = "Most requested time slots",
+        TimeSlot = "Time slot",
+        BookingCount = "Bookings",
+        OccupancyByCourt = "Occupancy by court",
+        ReservedHours = "Reserved hours",
+        AvailableHours = "Available hours",
+        OccupancyPercent = "Occupancy",
         Page = "Page ",
         Statuses = new Dictionary<ReservationStatus, string>
         {

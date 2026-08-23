@@ -25,4 +25,14 @@ public class ReportsController : ControllerBase
         var pdf = await _reports.ReservationsPdfAsync(dateFrom, dateTo, sportCenterId, language);
         return File(pdf, "application/pdf", $"rezervacije_{DateTime.UtcNow:yyyyMMdd_HHmm}.pdf");
     }
+
+    /// <summary>Court occupancy PDF: most requested slots and occupancy per court.</summary>
+    [HttpGet("occupancy")]
+    public async Task<IActionResult> Occupancy(
+        [FromQuery] DateOnly? dateFrom, [FromQuery] DateOnly? dateTo, [FromQuery] int? sportCenterId,
+        [FromQuery] string? language = null)
+    {
+        var pdf = await _reports.OccupancyPdfAsync(dateFrom, dateTo, sportCenterId, language);
+        return File(pdf, "application/pdf", $"popunjenost_{DateTime.UtcNow:yyyyMMdd_HHmm}.pdf");
+    }
 }
