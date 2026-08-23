@@ -64,6 +64,32 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Booking is binding (and possibly charged), so it needs an explicit confirmation.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(tr(ctx, 'Potvrda rezervacije')),
+        content: Text(
+          '${widget.court.name}\n'
+          '${formatDisplayDate(formatApiDate(widget.date))}, '
+          '${widget.slot.label}\n'
+          '${tr(ctx, 'Ukupno')}: ${formatPrice(_totalPrice)}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(tr(ctx, 'Odustani')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(tr(ctx, 'Rezerviši')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _submitting = true);
     try {
       final reservation = await context.read<ReservationProvider>().create(
@@ -98,7 +124,8 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
   }
 
   Future<void> _payWithStripe(int reservationId) async {
-    final intent = await context.read<PaymentProvider>().createIntent(reservationId);
+    final payments = context.read<PaymentProvider>();
+    final intent = await payments.createIntent(reservationId);
     Stripe.publishableKey = intent.publishableKey;
     await Stripe.instance.applySettings();
     await Stripe.instance.initPaymentSheet(
@@ -108,6 +135,9 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
       ),
     );
     await Stripe.instance.presentPaymentSheet();
+    // The sheet closing successfully is only the client's view — the server confirms
+    // the payment with Stripe directly and marks the reservation paid.
+    await payments.verify(reservationId);
   }
 
   void _goToConfirmation(Reservation reservation, {required bool paid}) {
