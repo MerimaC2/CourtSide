@@ -5,14 +5,21 @@ import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../models/sport.dart';
 import '../../models/sport_center.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/court_provider.dart';
 import '../../providers/sport_center_provider.dart';
 import '../../providers/sport_provider.dart';
+import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import 'court_form_dialog.dart';
 
 class CourtsScreen extends StatefulWidget {
-  const CourtsScreen({super.key});
+  /// Whether this is the currently selected section. The admin shell keeps every
+  /// section alive in an [IndexedStack], so courts and the sport/sport-centre lists
+  /// behind the form dropdowns are reloaded whenever the section becomes visible.
+  final bool isActive;
+
+  const CourtsScreen({super.key, this.isActive = true});
 
   @override
   State<CourtsScreen> createState() => _CourtsScreenState();
@@ -30,6 +37,12 @@ class _CourtsScreenState extends State<CourtsScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant CourtsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _load();
   }
 
   @override
@@ -85,12 +98,21 @@ class _CourtsScreenState extends State<CourtsScreen> {
     if (!mounted) return;
     final courtProvider = context.read<CourtProvider>();
     try {
+      final Court saved;
       if (court == null) {
-        await courtProvider.addAsync(result.toBody());
+        saved = await courtProvider.addAsync(result.toBody());
         if (mounted) showSuccess(context, 'Teren je dodan.');
       } else {
-        await courtProvider.updateAsync(court.id, result.toBody());
+        saved = await courtProvider.updateAsync(court.id, result.toBody());
         if (mounted) showSuccess(context, 'Teren je ažuriran.');
+      }
+      if (result.imageBytes != null) {
+        await courtProvider.uploadImage(
+          saved.id,
+          result.imageBytes!,
+          result.imageFilename ?? 'photo.jpg',
+          result.imageContentType ?? 'image/jpeg',
+        );
       }
       _load();
     } catch (e) {
@@ -185,6 +207,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
     return SingleChildScrollView(
       child: DataTable(
         columns: [
+          DataColumn(label: Text('')),
           DataColumn(label: Text(tr(context, 'Naziv'))),
           const DataColumn(label: Text('Sport')),
           DataColumn(label: Text(tr(context, 'Sportski centar'))),
@@ -194,6 +217,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
         ],
         rows: _courts.map((court) {
           return DataRow(cells: [
+            DataCell(_courtThumbnail(court)),
             DataCell(Text(court.name)),
             DataCell(Text(court.sportName ?? '-')),
             DataCell(Text(court.sportCenterName ?? '-')),
@@ -219,6 +243,30 @@ class _CourtsScreenState extends State<CourtsScreen> {
       ),
     );
   }
+
+  Widget _courtThumbnail(Court court) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: court.primaryImageId != null
+            ? Image.network(
+                '${BaseProvider.baseUrl}courts/${court.id}/images/${court.primaryImageId}',
+                headers: {'Authorization': 'Bearer ${Authorization.token}'},
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => _thumbnailPlaceholder(),
+              )
+            : _thumbnailPlaceholder(),
+      ),
+    );
+  }
+
+  Widget _thumbnailPlaceholder() => Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: Icon(Icons.image_outlined, color: Colors.grey.shade400, size: 18),
+      );
 
   Widget _statusChip(BuildContext context, bool isActive) {
     final color = isActive ? kPrimaryColor : Colors.grey;

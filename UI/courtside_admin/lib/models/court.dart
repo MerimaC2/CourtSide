@@ -1,3 +1,5 @@
+import 'court_working_hours.dart';
+
 class Court {
   final int id;
   final String name;
@@ -9,6 +11,7 @@ class Court {
   final double pricePerHour;
   final bool isActive;
   final int? primaryImageId;
+  final List<CourtWorkingHours> workingHours;
 
   Court({
     required this.id,
@@ -21,6 +24,7 @@ class Court {
     required this.pricePerHour,
     required this.isActive,
     this.primaryImageId,
+    this.workingHours = const [],
   });
 
   factory Court.fromJson(Map<String, dynamic> json) => Court(
@@ -34,5 +38,8 @@ class Court {
         pricePerHour: (json['pricePerHour'] as num?)?.toDouble() ?? 0,
         isActive: json['isActive'] as bool? ?? false,
         primaryImageId: json['primaryImageId'] as int?,
+        workingHours: ((json['workingHours'] as List?) ?? const [])
+            .map((e) => CourtWorkingHours.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }

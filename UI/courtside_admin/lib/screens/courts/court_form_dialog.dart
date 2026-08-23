@@ -1,9 +1,17 @@
+import 'dart:typed_data';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/court.dart';
+import '../../models/court_working_hours.dart';
 import '../../models/sport.dart';
 import '../../models/sport_center.dart';
+import '../../providers/base_provider.dart';
+import '../../utils/authorization.dart';
+import '../../utils/util.dart';
+import '../../widgets/dialog_header.dart';
 
 class CourtFormResult {
   final String name;
@@ -12,6 +20,10 @@ class CourtFormResult {
   final int sportCenterId;
   final double pricePerHour;
   final bool isActive;
+  final Uint8List? imageBytes;
+  final String? imageFilename;
+  final String? imageContentType;
+  final List<CourtWorkingHours> workingHours;
 
   CourtFormResult({
     required this.name,
@@ -20,6 +32,10 @@ class CourtFormResult {
     required this.sportCenterId,
     required this.pricePerHour,
     required this.isActive,
+    this.imageBytes,
+    this.imageFilename,
+    this.imageContentType,
+    this.workingHours = const [],
   });
 
   Map<String, dynamic> toBody() => {
@@ -29,6 +45,7 @@ class CourtFormResult {
         'sportCenterId': sportCenterId,
         'pricePerHour': pricePerHour,
         'isActive': isActive,
+        'workingHours': workingHours.map((w) => w.toJson()).toList(),
       };
 }
 
@@ -58,6 +75,9 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   int? _sportId;
   int? _sportCenterId;
   bool _isActive = true;
+  Uint8List? _imageBytes;
+  String? _imageFilename;
+  String? _imageContentType;
 
   @override
   void initState() {
@@ -69,6 +89,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     _sportId = court?.sportId;
     _sportCenterId = court?.sportCenterId;
     _isActive = court?.isActive ?? true;
+    _loadWorkingHours(court?.workingHours ?? const []);
   }
 
   @override
@@ -79,9 +100,188 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    final file = await openFile(acceptedTypeGroups: const [
+      XTypeGroup(label: 'Slika', extensions: ['jpg', 'jpeg', 'png', 'webp']),
+    ]);
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    setState(() {
+      _imageBytes = bytes;
+      _imageFilename = file.name;
+      _imageContentType = _contentTypeFor(file.name);
+    });
+  }
+
+  String _contentTypeFor(String filename) {
+    final lower = filename.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/jpeg';
+  }
+
+  Widget _buildImagePreview() {
+    if (_imageBytes != null) {
+      return Image.memory(_imageBytes!, fit: BoxFit.cover);
+    }
+    final court = widget.court;
+    if (court?.primaryImageId != null) {
+      return Image.network(
+        '${BaseProvider.baseUrl}courts/${court!.id}/images/${court.primaryImageId}',
+        headers: {'Authorization': 'Bearer ${Authorization.token}'},
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+    return _imagePlaceholder();
+  }
+
+  Widget _imagePlaceholder() => Container(
+        color: Colors.grey.shade100,
+        alignment: Alignment.center,
+        child: Icon(Icons.image_outlined, color: Colors.grey.shade400),
+      );
+
+  /// One row per weekday: whether the court is open and, if so, between which hours.
+  /// Availability is generated from these, so a court with no open days can never be booked.
+  static const _dayNames = [
+    'Ponedjeljak',
+    'Utorak',
+    'Srijeda',
+    'Četvrtak',
+    'Petak',
+    'Subota',
+    'Nedjelja',
+  ];
+
+  /// Row order is Monday-first; the API identifies days by their DayOfWeek name.
+  static const _apiDayOfWeek = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  final List<bool> _dayOpen = List<bool>.filled(7, true);
+  final List<TimeOfDay> _dayOpenTime =
+      List<TimeOfDay>.filled(7, const TimeOfDay(hour: 8, minute: 0));
+  final List<TimeOfDay> _dayCloseTime =
+      List<TimeOfDay>.filled(7, const TimeOfDay(hour: 22, minute: 0));
+
+  void _loadWorkingHours(List<CourtWorkingHours> hours) {
+    if (hours.isEmpty) return;
+    for (var i = 0; i < 7; i++) {
+      final match = hours.where((h) => h.dayOfWeek == _apiDayOfWeek[i]);
+      if (match.isEmpty) {
+        _dayOpen[i] = false;
+        continue;
+      }
+      _dayOpen[i] = true;
+      _dayOpenTime[i] = _parseTime(match.first.openTime, const TimeOfDay(hour: 8, minute: 0));
+      _dayCloseTime[i] = _parseTime(match.first.closeTime, const TimeOfDay(hour: 22, minute: 0));
+    }
+  }
+
+  static TimeOfDay _parseTime(String value, TimeOfDay fallback) {
+    final parts = value.split(':');
+    if (parts.length < 2) return fallback;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return fallback;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static String _formatApiTime(TimeOfDay time) =>
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:00';
+
+  List<CourtWorkingHours> _collectWorkingHours() {
+    final result = <CourtWorkingHours>[];
+    for (var i = 0; i < 7; i++) {
+      if (!_dayOpen[i]) continue;
+      result.add(CourtWorkingHours(
+        dayOfWeek: _apiDayOfWeek[i],
+        openTime: _formatApiTime(_dayOpenTime[i]),
+        closeTime: _formatApiTime(_dayCloseTime[i]),
+      ));
+    }
+    return result;
+  }
+
+  Future<void> _pickTime(int dayIndex, {required bool opening}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: opening ? _dayOpenTime[dayIndex] : _dayCloseTime[dayIndex],
+    );
+    if (picked == null) return;
+    setState(() {
+      if (opening) {
+        _dayOpenTime[dayIndex] = picked;
+      } else {
+        _dayCloseTime[dayIndex] = picked;
+      }
+    });
+  }
+
+  bool _workingHoursValid() {
+    for (var i = 0; i < 7; i++) {
+      if (!_dayOpen[i]) continue;
+      final open = _dayOpenTime[i].hour * 60 + _dayOpenTime[i].minute;
+      final close = _dayCloseTime[i].hour * 60 + _dayCloseTime[i].minute;
+      if (close <= open) return false;
+    }
+    return _dayOpen.any((open) => open);
+  }
+
+  Widget _buildWorkingHours() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(tr(context, 'Radno vrijeme'),
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(tr(context, 'Termini se generišu iz radnog vremena.'),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        const SizedBox(height: 8),
+        for (var i = 0; i < 7; i++)
+          Row(
+            children: [
+              SizedBox(
+                width: 150,
+                child: CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _dayOpen[i],
+                  title: Text(tr(context, _dayNames[i]), style: const TextStyle(fontSize: 13)),
+                  onChanged: (v) => setState(() => _dayOpen[i] = v ?? false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: _dayOpen[i] ? () => _pickTime(i, opening: true) : null,
+                child: Text(_dayOpenTime[i].format(context)),
+              ),
+              const Text('–'),
+              TextButton(
+                onPressed: _dayOpen[i] ? () => _pickTime(i, opening: false) : null,
+                child: Text(_dayCloseTime[i].format(context)),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     if (_sportId == null || _sportCenterId == null) return;
+    if (!_workingHoursValid()) {
+      showError(context, "Teren mora biti otvoren barem jedan dan, a zatvaranje mora biti nakon otvaranja.");
+      return;
+    }
     Navigator.of(context).pop(
       CourtFormResult(
         name: _nameController.text.trim(),
@@ -90,6 +290,10 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
         sportCenterId: _sportCenterId!,
         pricePerHour: double.parse(_priceController.text.trim().replaceAll(',', '.')),
         isActive: _isActive,
+        imageBytes: _imageBytes,
+        imageFilename: _imageFilename,
+        imageContentType: _imageContentType,
+        workingHours: _collectWorkingHours(),
       ),
     );
   }
@@ -97,7 +301,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(tr(context, widget.court == null ? 'Novi teren' : 'Uređivanje terena')),
+      title: dialogHeader(context, tr(context, widget.court == null ? 'Novi teren' : 'Uređivanje terena')),
       content: SizedBox(
         width: 420,
         child: Form(
@@ -117,6 +321,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: _sportId,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Sport'),
                   items: widget.sports
                       .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
@@ -127,6 +332,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: _sportCenterId,
+                  isExpanded: true,
                   decoration: InputDecoration(labelText: tr(context, 'Sportski centar')),
                   items: widget.sportCenters
                       .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
@@ -151,6 +357,27 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                   maxLines: 2,
                   decoration: InputDecoration(labelText: tr(context, 'Opis (opciono)')),
                 ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: _buildImagePreview(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.photo_outlined),
+                        label: Text(tr(context, 'Odaberi sliku')),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -158,6 +385,8 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                   value: _isActive,
                   onChanged: (v) => setState(() => _isActive = v),
                 ),
+                const Divider(height: 24),
+                _buildWorkingHours(),
               ],
             ),
           ),
