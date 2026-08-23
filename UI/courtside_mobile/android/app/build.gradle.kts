@@ -30,7 +30,14 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+    }
+
+    lint {
+        // Release lint analiza povlaci play-services-tapandpay (tranzitivno kroz
+        // stripe_android), koji Google vise ne objavljuje na Mavenu.
+        checkReleaseBuilds = false
     }
 }
 
