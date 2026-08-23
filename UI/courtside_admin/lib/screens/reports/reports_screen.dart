@@ -4,12 +4,13 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/sport_center.dart';
 import '../../providers/report_provider.dart';
 import '../../providers/sport_center_provider.dart';
+import '../../utils/app_locale.dart';
 import '../../utils/util.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -64,11 +65,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
   Future<void> _generate() async {
     setState(() => _generating = true);
     final reportProvider = context.read<ReportProvider>();
+    final language = context.read<LocaleProvider>().language == AppLanguage.en ? 'en' : 'bs';
     try {
       final bytes = await reportProvider.getReservationsReport(
         dateFrom: _dateFrom,
         dateTo: _dateTo,
         sportCenterId: _sportCenterId,
+        language: language,
       );
       final suggestedName =
           'rezervacije_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
@@ -84,12 +87,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(tr(context, 'Izvještaj je sačuvan.')),
+          content: Text(trMessage(context, 'Izvještaj je sačuvan.')),
           backgroundColor: kPrimaryColor,
           action: SnackBarAction(
-            label: tr(context, 'Otvori'),
+            label: trMessage(context, 'Otvori'),
             textColor: Colors.white,
-            onPressed: () => launchUrl(Uri.file(file.path)),
+            onPressed: () => _openReport(file.path),
           ),
         ),
       );
@@ -98,6 +101,25 @@ class _ReportsScreenState extends State<ReportsScreen> {
     } finally {
       if (mounted) setState(() => _generating = false);
     }
+  }
+
+  /// Hands the saved file to the shell so it opens in the default PDF viewer.
+  /// The plain Windows path is passed rather than a `file:` URI, which the shell
+  /// resolves directly. If no viewer can be launched the path is shown instead, so
+  /// the report is still findable.
+  Future<void> _openReport(String path) async {
+    var opened = false;
+    try {
+      opened = await launchUrlString(path);
+    } catch (_) {
+      opened = false;
+    }
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${trMessage(context, 'Izvještaj je sačuvan u:')} $path'),
+      ),
+    );
   }
 
   @override

@@ -17,15 +17,19 @@ class ReportProvider {
     _http = IOClient(client);
   }
 
+  /// [language] is the UI language the report should be written in; the PDF is
+  /// rendered on the server, so it can't pick this up on its own.
   Future<Uint8List> getReservationsReport({
     DateTime? dateFrom,
     DateTime? dateTo,
     int? sportCenterId,
+    String language = 'bs',
   }) async {
     final params = <String, String>{
       if (dateFrom != null) 'dateFrom': formatApiDate(dateFrom),
       if (dateTo != null) 'dateTo': formatApiDate(dateTo),
       if (sportCenterId != null) 'sportCenterId': sportCenterId.toString(),
+      'language': language,
     };
     final uri = Uri.parse('${AppConfig.apiBase}reports/reservations')
         .replace(queryParameters: params.isEmpty ? null : params);
