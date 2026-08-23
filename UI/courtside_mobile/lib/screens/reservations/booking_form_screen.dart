@@ -10,6 +10,7 @@ import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../utils/validators.dart';
 import 'booking_confirmation_screen.dart';
 
 class BookingFormScreen extends StatefulWidget {
@@ -130,6 +131,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -155,8 +157,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
                   labelText: tr(context, 'Broj telefona'),
                   prefixIcon: const Icon(Icons.phone_outlined),
                 ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite broj telefona') : null,
+                validator: (v) => validatePhone(context, v),
               ),
               const SizedBox(height: 12),
               TextFormField(

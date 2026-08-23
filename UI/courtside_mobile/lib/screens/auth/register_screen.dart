@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/translations.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/util.dart';
+import '../../utils/validators.dart';
 import '../courts/courts_list_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -73,6 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -118,8 +120,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Email',
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (v) =>
-                      (v == null || !v.contains('@')) ? tr(context, 'Unesite ispravan email') : null,
+                  validator: (v) => validateEmail(context, v),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -129,6 +130,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: tr(context, 'Broj telefona'),
                     prefixIcon: const Icon(Icons.phone_outlined),
                   ),
+                  validator: (v) => validatePhone(context, v, required: false),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

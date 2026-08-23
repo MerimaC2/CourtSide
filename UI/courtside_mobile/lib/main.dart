@@ -5,7 +5,11 @@ import 'providers/auth_provider.dart';
 import 'providers/availability_provider.dart';
 import 'providers/city_provider.dart';
 import 'providers/court_provider.dart';
+import 'providers/court_review_provider.dart';
+import 'providers/news_provider.dart';
+import 'providers/notification_provider.dart';
 import 'providers/payment_provider.dart';
+import 'providers/profile_provider.dart';
 import 'providers/recommendation_provider.dart';
 import 'providers/reservation_provider.dart';
 import 'providers/sport_provider.dart';
@@ -36,6 +40,10 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ReservationProvider()),
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         ChangeNotifierProvider(create: (_) => RecommendationProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => NewsProvider()),
+        ChangeNotifierProvider(create: (_) => CourtReviewProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
       ],
       child: const CourtSideApp(),
     ),

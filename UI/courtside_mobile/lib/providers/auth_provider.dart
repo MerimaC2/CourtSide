@@ -75,5 +75,22 @@ class AuthProvider with ChangeNotifier {
     return user;
   }
 
-  void signOut() => Authorization.clear();
+
+  /// Tells the API to invalidate this token, then clears it locally. A failure here
+  /// must not trap the user in the app, so the local session is cleared either way.
+  Future<void> signOut() async {
+    final token = Authorization.token;
+    if (token != null && token.isNotEmpty) {
+      try {
+        await _http.post(
+          Uri.parse('uth/logout'),
+          headers: {'Authorization': 'Bearer '},
+        );
+      } catch (_) {
+        // Offline or server unreachable — the local sign-out below still applies.
+      }
+    }
+    Authorization.clear();
+    notifyListeners();
+  }
 }

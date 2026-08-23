@@ -6,6 +6,7 @@ import 'package:http/http.dart';
 import 'package:http/io_client.dart';
 
 import '../config/app_config.dart';
+import 'api_error.dart';
 import '../models/search_result.dart';
 import '../utils/app_navigator.dart';
 import '../utils/authorization.dart';
@@ -88,16 +89,7 @@ abstract class BaseProvider<T> with ChangeNotifier {
     if (response.statusCode == 403) {
       throw Exception('Nemate ovlaštenje za ovu radnju.');
     }
-    String message;
-    try {
-      final body = jsonDecode(response.body);
-      message = (body['message'] as String?)?.trim() ??
-          (body['title'] as String?)?.trim() ??
-          'HTTP ${response.statusCode}';
-    } catch (_) {
-      message = response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}';
-    }
-    throw Exception(message);
+    throw Exception(errorMessageFrom(response));
   }
 
   Map<String, String> createHeaders() {

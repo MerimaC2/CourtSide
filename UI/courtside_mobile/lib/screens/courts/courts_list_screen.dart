@@ -6,14 +6,20 @@ import '../../models/city.dart';
 import '../../models/court.dart';
 import '../../models/recommendation.dart';
 import '../../models/sport.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/city_provider.dart';
 import '../../providers/court_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../providers/recommendation_provider.dart';
 import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../../widgets/language_toggle.dart';
 import '../auth/login_screen.dart';
+import '../news/news_screen.dart';
+import '../notifications/notifications_screen.dart';
+import '../profile/profile_screen.dart';
 import '../reservations/my_reservations_screen.dart';
 import 'court_details_screen.dart';
 
@@ -39,6 +45,9 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
   void initState() {
     super.initState();
     _init();
+    final notificationProvider = context.read<NotificationProvider>();
+    notificationProvider.refreshUnreadCount();
+    notificationProvider.connect();
   }
 
   @override
@@ -48,16 +57,35 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
   }
 
   Future<void> _init() async {
+    await _loadFilters();
+    await _loadCourts();
+  }
+
+  /// Pull-to-refresh reloads the filter data as well as the courts, so sports and
+  /// cities added in the admin app appear without restarting the app.
+  Future<void> _refreshAll() async {
+    await _loadFilters();
+    await _loadCourts();
+  }
+
+  Future<void> _loadFilters() async {
     final sportProvider = context.read<SportProvider>();
     final cityProvider = context.read<CityProvider>();
     final recommendationProvider = context.read<RecommendationProvider>();
     try {
-      final sports = await sportProvider.get(filter: {'Page': 1, 'PageSize': 100});
-      final cities = await cityProvider.get(filter: {'Page': 1, 'PageSize': 100});
+      // Independent of each other — issue both requests before awaiting either.
+      final sportsRequest = sportProvider.get(filter: {'Page': 1, 'PageSize': 100});
+      final citiesRequest = cityProvider.get(filter: {'Page': 1, 'PageSize': 100});
+      final sports = await sportsRequest;
+      final cities = await citiesRequest;
       if (!mounted) return;
       setState(() {
         _sports = sports.result;
         _cities = cities.result;
+        // A filter pointing at a sport/city that no longer exists would leave the
+        // dropdown with a value that isn't among its items.
+        if (_sportId != null && !_sports.any((s) => s.id == _sportId)) _sportId = null;
+        if (_cityId != null && !_cities.any((c) => c.id == _cityId)) _cityId = null;
       });
     } catch (_) {
       // Filters are optional; ignore load failures here.
@@ -69,7 +97,6 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
     } catch (_) {
       // Recommendations are a bonus section; ignore load failures here.
     }
-    await _loadCourts();
   }
 
   Future<void> _loadCourts() async {
@@ -101,8 +128,10 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
     }
   }
 
-  void _logout() {
-    Authorization.clear();
+  Future<void> _logout() async {
+    context.read<NotificationProvider>().disconnect();
+    await context.read<AuthProvider>().signOut();
+    if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
@@ -111,6 +140,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = context.watch<NotificationProvider>().unreadCount;
     return Scaffold(
       appBar: AppBar(
         title: Text(tr(context, 'Tereni')),
@@ -118,6 +148,31 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
         foregroundColor: Colors.white,
         actions: [
           const LanguageToggle(),
+          IconButton(
+            tooltip: tr(context, 'Obavijesti'),
+            icon: const Icon(Icons.campaign_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NewsScreen()),
+            ),
+          ),
+          IconButton(
+            tooltip: tr(context, 'Notifikacije'),
+            icon: Badge(
+              label: Text('$unreadCount'),
+              isLabelVisible: unreadCount > 0,
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            ),
+          ),
+          IconButton(
+            tooltip: tr(context, 'Moj profil'),
+            icon: const Icon(Icons.person_outline),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+          ),
           IconButton(
             tooltip: tr(context, 'Moje rezervacije'),
             icon: const Icon(Icons.event_note_outlined),
@@ -215,7 +270,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  recommendation.reason,
+                  tr(context, recommendation.reason),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
@@ -319,7 +374,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       return Center(child: Text(tr(context, 'Nema terena za zadane filtere.')));
     }
     return RefreshIndicator(
-      onRefresh: _loadCourts,
+      onRefresh: _refreshAll,
       child: ListView.separated(
         padding: const EdgeInsets.all(12),
         itemCount: _courts.length,
@@ -338,15 +393,46 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: kPrimaryColor.withValues(alpha: 0.12),
-          child: const Icon(Icons.sports_tennis, color: kPrimaryColor),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: SizedBox(
+            width: 48,
+            height: 48,
+            child: court.primaryImageId != null
+                ? Image.network(
+                    '${BaseProvider.baseUrl}courts/${court.id}/images/${court.primaryImageId}',
+                    headers: {'Authorization': 'Bearer ${Authorization.token}'},
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _courtIconFallback(),
+                  )
+                : _courtIconFallback(),
+          ),
         ),
         title: Text(court.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(
-          [court.sportName, court.sportCenterName]
-              .where((e) => e != null && e.isNotEmpty)
-              .join(' • '),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              [court.sportName, court.sportCenterName]
+                  .where((e) => e != null && e.isNotEmpty)
+                  .join(' • '),
+            ),
+            if (court.averageRating != null) ...[
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 14),
+                  const SizedBox(width: 3),
+                  Text(court.averageRating!.toStringAsFixed(1),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 3),
+                  Text('(${court.reviewCount})',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ],
+          ],
         ),
         trailing: Text(
           formatPrice(court.pricePerHour),
@@ -359,4 +445,10 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       ),
     );
   }
+
+  Widget _courtIconFallback() => Container(
+        color: kPrimaryColor.withValues(alpha: 0.12),
+        alignment: Alignment.center,
+        child: const Icon(Icons.sports_tennis, color: kPrimaryColor),
+      );
 }
