@@ -187,18 +187,8 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
     );
   }
 
-  bool _isPastOrCurrentHour(AvailabilitySlot slot) {
-    final now = DateTime.now();
-    final isToday = _selectedDate.year == now.year &&
-        _selectedDate.month == now.month &&
-        _selectedDate.day == now.day;
-    if (!isToday) return false;
-    final slotHour = int.tryParse(slot.startTime.split(':').first) ?? 0;
-    return slotHour <= now.hour;
-  }
-
   Widget _slotTile(AvailabilitySlot slot) {
-    final available = slot.isAvailable && !_isPastOrCurrentHour(slot);
+    final available = slot.isBookable;
     final Color color;
     switch (slot.status) {
       case 'Available':

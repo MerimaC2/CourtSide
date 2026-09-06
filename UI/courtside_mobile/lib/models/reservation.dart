@@ -21,6 +21,12 @@ class Reservation {
   final bool isPaid;
   final bool hasReview;
 
+  /// Decided by the server, which owns the venue's time zone and the cancellation rule.
+  /// Computing it from device time would disagree with what the API actually enforces.
+  final bool canCancel;
+  final DateTime? startsAt;
+  final DateTime? cancelDeadlineAt;
+
   Reservation({
     required this.id,
     required this.reservationNumber,
@@ -43,6 +49,9 @@ class Reservation {
     this.paymentStatus,
     required this.isPaid,
     required this.hasReview,
+    required this.canCancel,
+    this.startsAt,
+    this.cancelDeadlineAt,
   });
 
   factory Reservation.fromJson(Map<String, dynamic> json) => Reservation(
@@ -67,26 +76,12 @@ class Reservation {
         paymentStatus: json['paymentStatus'] as String?,
         isPaid: json['isPaid'] as bool? ?? false,
         hasReview: json['hasReview'] as bool? ?? false,
+        canCancel: json['canCancel'] as bool? ?? false,
+        startsAt: DateTime.tryParse(json['startsAt'] as String? ?? '')?.toLocal(),
+        cancelDeadlineAt: DateTime.tryParse(json['cancelDeadlineAt'] as String? ?? '')?.toLocal(),
       );
 
   bool get isActive => status == 'Pending' || status == 'Confirmed';
-
-  DateTime? get startDateTime {
-    try {
-      final d = DateTime.parse(date);
-      final parts = startTime.split(':');
-      return DateTime(d.year, d.month, d.day, int.parse(parts[0]), int.parse(parts[1]));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool get canCancel {
-    if (!isActive) return false;
-    final start = startDateTime;
-    if (start == null) return true;
-    return start.difference(DateTime.now()).inHours >= 24;
-  }
 
   String get timeRange => '${startTime.substring(0, 5)} - ${endTime.substring(0, 5)}';
 }
