@@ -31,6 +31,22 @@ public class ReservationDto
     public PaymentStatus? PaymentStatus { get; set; }
     public bool IsPaid { get; set; }
     public bool HasReview { get; set; }
+
+    // Decided on the server so the apps never re-derive them from device time: the slot is stored
+    // as local wall-clock, and a client in another zone would reach a different answer than the
+    // rules the server actually enforces.
+
+    /// <summary>Start of the slot as a point on the timeline, with the venue's offset applied.</summary>
+    public DateTimeOffset StartsAt { get; set; }
+
+    /// <summary>End of the slot as a point on the timeline.</summary>
+    public DateTimeOffset EndsAt { get; set; }
+
+    /// <summary>Whether the signed-in user may still cancel — same rule <c>CancelAsync</c> enforces.</summary>
+    public bool CanCancel { get; set; }
+
+    /// <summary>Last moment a client can cancel; null once cancelling is no longer possible.</summary>
+    public DateTimeOffset? CancelDeadlineAt { get; set; }
 }
 
 public class ReservationCreateDto

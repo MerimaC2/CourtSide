@@ -8,6 +8,13 @@ public class AvailabilitySlotDto
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
     public SlotStatus Status { get; set; }
+
+    /// <summary>
+    /// Whether the slot has already started, decided against the venue's local time. The apps
+    /// must not work this out from device time — they would disagree with the server, which
+    /// rejects bookings for slots that have begun.
+    /// </summary>
+    public bool IsPast { get; set; }
 }
 
 public class AvailabilityBlockDto

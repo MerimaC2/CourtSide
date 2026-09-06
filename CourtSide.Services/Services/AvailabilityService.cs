@@ -21,11 +21,13 @@ public class AvailabilityService : IAvailabilityService
 {
     private readonly DatabaseContext _db;
     private readonly ICurrentUser _currentUser;
+    private readonly IAppClock _clock;
 
-    public AvailabilityService(DatabaseContext db, ICurrentUser currentUser)
+    public AvailabilityService(DatabaseContext db, ICurrentUser currentUser, IAppClock clock)
     {
         _db = db;
         _currentUser = currentUser;
+        _clock = clock;
     }
 
     public async Task<List<AvailabilitySlotDto>> GetSlotsAsync(int courtId, DateOnly date)
@@ -62,7 +64,13 @@ public class AvailabilityService : IAvailabilityService
             else if (reservations.Any(r => r.StartTime < slotEnd && slotStart < r.EndTime))
                 status = SlotStatus.Reserved;
 
-            slots.Add(new AvailabilitySlotDto { StartTime = slotStart, EndTime = slotEnd, Status = status });
+            slots.Add(new AvailabilitySlotDto
+            {
+                StartTime = slotStart,
+                EndTime = slotEnd,
+                Status = status,
+                IsPast = _clock.HasPassed(date, slotStart)
+            });
         }
 
         return slots;
