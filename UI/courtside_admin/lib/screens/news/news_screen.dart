@@ -71,11 +71,11 @@ class _NewsScreenState extends State<NewsScreen> {
       final News saved;
       if (news == null) {
         saved = await provider.addAsync(result.toBody());
-        if (mounted) showSuccess(context, 'Obavijest je dodana.');
       } else {
         saved = await provider.updateAsync(news.id, result.toBody());
-        if (mounted) showSuccess(context, 'Obavijest je ažurirana.');
       }
+      // The image is a second request, so success is reported only once both have landed —
+      // otherwise a rejected image would follow a "saved" message.
       if (result.imageBytes != null) {
         await provider.uploadImage(
           saved.id,
@@ -83,6 +83,9 @@ class _NewsScreenState extends State<NewsScreen> {
           result.imageFilename ?? 'photo.jpg',
           result.imageContentType ?? 'image/jpeg',
         );
+      }
+      if (mounted) {
+        showSuccess(context, news == null ? 'Obavijest je dodana.' : 'Obavijest je ažurirana.');
       }
       _load();
     } catch (e) {

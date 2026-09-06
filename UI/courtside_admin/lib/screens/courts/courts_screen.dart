@@ -102,11 +102,11 @@ class _CourtsScreenState extends State<CourtsScreen> {
       final Court saved;
       if (court == null) {
         saved = await courtProvider.addAsync(result.toBody());
-        if (mounted) showSuccess(context, 'Teren je dodan.');
       } else {
         saved = await courtProvider.updateAsync(court.id, result.toBody());
-        if (mounted) showSuccess(context, 'Teren je ažuriran.');
       }
+      // The image is a second request, so success is reported only once both have landed —
+      // otherwise a rejected image would follow a "saved" message.
       if (result.imageBytes != null) {
         await courtProvider.uploadImage(
           saved.id,
@@ -114,6 +114,9 @@ class _CourtsScreenState extends State<CourtsScreen> {
           result.imageFilename ?? 'photo.jpg',
           result.imageContentType ?? 'image/jpeg',
         );
+      }
+      if (mounted) {
+        showSuccess(context, court == null ? 'Teren je dodan.' : 'Teren je ažuriran.');
       }
       _load();
     } catch (e) {
