@@ -10,6 +10,7 @@ import '../../models/sport.dart';
 import '../../models/sport_center.dart';
 import '../../providers/base_provider.dart';
 import '../../utils/authorization.dart';
+import '../../utils/image_validation.dart';
 import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
 
@@ -76,6 +77,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   int? _sportCenterId;
   bool _isActive = true;
   Uint8List? _imageBytes;
+  String? _imageError;
   String? _imageFilename;
   String? _imageContentType;
 
@@ -106,21 +108,32 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     ]);
     if (file == null) return;
     final bytes = await file.readAsBytes();
+    final contentType = imageContentTypeFor(file.name);
+    final error = validateImage(bytes, contentType);
+    if (error != null) {
+      // The rejected file replaces the preview so the form never shows an image it is not
+      // going to save. Saving stays blocked until a valid file is picked or the pick is undone.
+      setState(() {
+        _imageError = error;
+        _imageBytes = null;
+        _imageFilename = null;
+        _imageContentType = null;
+      });
+      return;
+    }
     setState(() {
+      _imageError = null;
       _imageBytes = bytes;
       _imageFilename = file.name;
-      _imageContentType = _contentTypeFor(file.name);
+      _imageContentType = contentType;
     });
   }
 
-  String _contentTypeFor(String filename) {
-    final lower = filename.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    return 'image/jpeg';
-  }
+  /// Drops the rejected pick and restores whatever the court already had.
+  void _clearImagePick() => setState(() => _imageError = null);
 
   Widget _buildImagePreview() {
+    if (_imageError != null) return _rejectedImagePlaceholder();
     if (_imageBytes != null) {
       return Image.memory(_imageBytes!, fit: BoxFit.cover);
     }
@@ -141,6 +154,19 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
         alignment: Alignment.center,
         child: Icon(Icons.image_outlined, color: Colors.grey.shade400),
       );
+
+  Widget _rejectedImagePlaceholder() {
+    final error = Theme.of(context).colorScheme.error;
+    return Container(
+      decoration: BoxDecoration(
+        color: error.withValues(alpha: 0.08),
+        border: Border.all(color: error),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: Icon(Icons.broken_image_outlined, color: error),
+    );
+  }
 
   /// One row per weekday: whether the court is open and, if so, between which hours.
   /// Availability is generated from these, so a court with no open days can never be booked.
@@ -378,6 +404,35 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                     ),
                   ],
                 ),
+                if (_imageError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline,
+                            size: 16, color: Theme.of(context).colorScheme.error),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            trMessage(context, _imageError!),
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.error, fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _clearImagePick,
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: const Size(0, 28),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(tr(context, 'Poništi odabir'),
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 4),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
@@ -397,7 +452,15 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(tr(context, 'Odustani')),
         ),
-        FilledButton(onPressed: _save, child: Text(tr(context, 'Sačuvaj'))),
+        Tooltip(
+          message: _imageError == null
+              ? ''
+              : tr(context, 'Odaberite ispravnu sliku ili poništite odabir.'),
+          child: FilledButton(
+            onPressed: _imageError == null ? _save : null,
+            child: Text(tr(context, 'Sačuvaj')),
+          ),
+        ),
       ],
     );
   }

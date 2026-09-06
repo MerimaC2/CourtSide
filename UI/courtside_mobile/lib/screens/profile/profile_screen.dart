@@ -6,6 +6,7 @@ import '../../l10n/translations.dart';
 import '../../models/profile.dart';
 import '../../providers/profile_provider.dart';
 import '../../utils/authorization.dart';
+import '../../utils/image_validation.dart';
 import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
 
@@ -95,7 +96,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final provider = context.read<ProfileProvider>();
     try {
       final bytes = await picked.readAsBytes();
-      final contentType = _contentTypeFor(picked.name);
+      final contentType = imageContentTypeFor(picked.name);
+      final error = validateImage(bytes, contentType);
+      if (error != null) {
+        if (mounted) showError(context, error);
+        return;
+      }
       await provider.uploadImage(bytes, picked.name, contentType);
       if (!mounted) return;
       setState(() => _imageVersion++);
@@ -103,13 +109,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
     }
-  }
-
-  String _contentTypeFor(String filename) {
-    final lower = filename.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    return 'image/jpeg';
   }
 
   Future<void> _changePassword() async {

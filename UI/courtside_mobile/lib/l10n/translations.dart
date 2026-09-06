@@ -33,6 +33,13 @@ const Map<String, String> _dict = {
   'Nova lozinka je prekratka.': 'The new password is too short.',
   'Registruj se': 'Sign up',
 
+  // Image upload validation
+  'Fajl je prazan.': 'The file is empty.',
+  'Slika ne smije biti veća od 5 MB.': 'The image must not exceed 5 MB.',
+  'Dozvoljeni formati slike su JPEG, PNG i WebP.': 'Allowed image formats are JPEG, PNG and WebP.',
+  'Sadržaj fajla ne odgovara prijavljenom formatu slike.':
+      'The file contents do not match the declared image format.',
+
   // Profile
   'Moj profil': 'My profile',
   'Profil je ažuriran.': 'Profile updated.',

@@ -27,6 +27,15 @@ const Map<String, String> _dict = {
   'Unesite lozinku': 'Enter your password',
   'Ovaj nalog nema administratorska prava.': 'This account does not have administrator privileges.',
 
+  // Image upload validation
+  'Poništi odabir': 'Clear selection',
+  'Odaberite ispravnu sliku ili poništite odabir.': 'Choose a valid image or clear the selection.',
+  'Fajl je prazan.': 'The file is empty.',
+  'Slika ne smije biti veća od 5 MB.': 'The image must not exceed 5 MB.',
+  'Dozvoljeni formati slike su JPEG, PNG i WebP.': 'Allowed image formats are JPEG, PNG and WebP.',
+  'Sadržaj fajla ne odgovara prijavljenom formatu slike.':
+      'The file contents do not match the declared image format.',
+
   // Courts
   'Recenzije': 'Reviews',
   'Prosječna ocjena': 'Average rating',
