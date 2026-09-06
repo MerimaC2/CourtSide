@@ -25,8 +25,11 @@ public interface IReservationService
     Task<ReservationDto> CreateAsync(ReservationCreateDto dto);
     Task<ReservationDto> ConfirmAsync(int id);
     Task<ReservationDto> CancelAsync(int id, ReservationCancelDto dto);
-    Task<int> CompletePastDueAsync(CancellationToken cancellationToken = default);
+    Task<ReservationSweepResult> ProcessPastDueAsync(CancellationToken cancellationToken = default);
 }
+
+/// <summary>How many reservations the sweep closed as finished and how many it expired.</summary>
+public readonly record struct ReservationSweepResult(int Completed, int Expired);
 
 public class ReservationService : IReservationService
 {
@@ -96,6 +99,11 @@ public class ReservationService : IReservationService
         if (workingHours is null || dto.StartTime < workingHours.OpenTime || dto.EndTime > workingHours.CloseTime)
             throw new BusinessException("Odabrani termin je izvan radnog vremena terena.");
 
+        // Only whole slots from the court's schedule are accepted. Availability offers full hours
+        // and the occupancy report groups by them, so a free-form range would be counted wrongly.
+        if (!SlotGrid.IsSlot(workingHours.OpenTime, workingHours.CloseTime, dto.StartTime, dto.EndTime))
+            throw new BusinessException("Odaberite termin iz ponuđenog rasporeda terena.");
+
         // Overlap check on the server (not only on the client).
         var overlapsReservation = await _db.Reservations.AnyAsync(r =>
             r.CourtId == dto.CourtId && r.Date == dto.Date &&
@@ -157,10 +165,18 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationDto> ConfirmAsync(int id)
     {
-        var reservation = await _db.Reservations.FirstOrDefaultAsync(r => r.Id == id)
+        var reservation = await _db.Reservations.Include(r => r.Court).FirstOrDefaultAsync(r => r.Id == id)
             ?? throw new NotFoundException("Rezervacija", id);
 
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Confirmed);
+
+        // Confirming something that has already happened would only produce a reservation that the
+        // sweep immediately closes; the administrator should cancel it instead.
+        if (_clock.HasPassed(reservation.Date, reservation.StartTime))
+            throw new BusinessException("Termin je već počeo — rezervaciju više nije moguće potvrditi.");
+
+        if (!reservation.Court.IsActive)
+            throw new BusinessException("Teren više nije aktivan — rezervaciju nije moguće potvrditi.");
 
         reservation.Status = ReservationStatus.Confirmed;
         reservation.ConfirmedAt = DateTime.UtcNow;
@@ -243,44 +259,86 @@ public class ReservationService : IReservationService
     /// and notifies the client. Driven by <c>ReservationCompletionService</c> rather than a user action,
     /// since completion happens with the passage of time. Returns how many were completed.
     /// </summary>
-    public async Task<int> CompletePastDueAsync(CancellationToken cancellationToken = default)
+    public async Task<ReservationSweepResult> ProcessPastDueAsync(CancellationToken cancellationToken = default)
     {
         // The slot is local wall-clock; the audit stamp stays UTC.
         var now = _clock.UtcNow;
         var today = _clock.Today;
         var timeOfDay = _clock.LocalTimeOfDay;
 
-        // Date and time are compared separately so the filter runs in SQL instead of
-        // pulling every confirmed reservation into memory.
-        var pastDue = await _db.Reservations
+        // Date and time are compared separately so the filters run in SQL instead of
+        // pulling every open reservation into memory.
+        var completed = await _db.Reservations
             .Where(r => r.Status == ReservationStatus.Confirmed &&
                         (r.Date < today || (r.Date == today && r.EndTime <= timeOfDay)))
             .ToListAsync(cancellationToken);
 
-        if (pastDue.Count == 0) return 0;
+        // A reservation nobody confirmed before its slot began is dead: it can no longer be
+        // honoured, yet it would keep blocking the slot and skewing reports and recommendations.
+        // The cut-off is the start, not the end, so the slot is released as soon as it is wasted.
+        var expired = await _db.Reservations
+            .Where(r => r.Status == ReservationStatus.Pending &&
+                        (r.Date < today || (r.Date == today && r.StartTime <= timeOfDay)))
+            .ToListAsync(cancellationToken);
+
+        if (completed.Count == 0 && expired.Count == 0) return new ReservationSweepResult(0, 0);
 
         // The status updates and their notifications are saved separately, so they share
         // one transaction and either all land or none do.
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
-        foreach (var reservation in pastDue)
+        foreach (var reservation in completed)
         {
             ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Completed);
             reservation.Status = ReservationStatus.Completed;
             reservation.CompletedAt = now;
             reservation.UpdatedAt = now;
         }
+
+        foreach (var reservation in expired)
+        {
+            ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
+            reservation.Status = ReservationStatus.Cancelled;
+            reservation.CancelledAt = now;
+            reservation.CancelledById = null; // cancelled by the system, not by a user
+            reservation.CancellationReason = ReservationPolicy.SystemExpiryReason;
+            reservation.UpdatedAt = now;
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
-        foreach (var reservation in pastDue)
+        foreach (var reservation in completed)
         {
             await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCompleted,
                 "Rezervacija završena",
                 $"Vaša rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je završena. Možete ocijeniti teren.");
         }
 
+        foreach (var reservation in expired)
+        {
+            await _notifications.CreateAsync(reservation.ClientId, NotificationType.ReservationCancelled,
+                "Rezervacija otkazana",
+                $"Rezervacija {ReservationNumber.Short(reservation.ReservationNumber)} je otkazana. Razlog: {ReservationPolicy.SystemExpiryReason}");
+        }
+
         await transaction.CommitAsync(cancellationToken);
-        return pastDue.Count;
+
+        // Refunds reach outside the database, so they run after the commit — a payment provider
+        // failure must not undo the cancellations that were already recorded.
+        foreach (var reservation in expired)
+        {
+            try
+            {
+                await _payments.RefundAsync(reservation.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Istek rezervacije {Number}: automatski povrat nije uspio.",
+                    reservation.ReservationNumber);
+            }
+        }
+
+        return new ReservationSweepResult(completed.Count, expired.Count);
     }
 
     private async Task<PagedResult<ReservationDto>> QueryAsync(ReservationSearchObject search, IQueryable<Reservation> query)
@@ -330,6 +388,7 @@ public class ReservationService : IReservationService
         dto.CancelDeadlineAt = cancellable ? deadline : null;
         dto.CanCancel = cancellable &&
             (_currentUser.IsAdmin || _clock.TimeUntil(dto.Date, dto.StartTime) >= ReservationPolicy.CancellationWindow);
+        dto.CanConfirm = dto.Status == ReservationStatus.Pending && !_clock.HasPassed(dto.Date, dto.StartTime);
     }
 
     private async Task SendEmailAsync(int userId, string subject, string body)

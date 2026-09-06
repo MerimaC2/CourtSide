@@ -60,7 +60,8 @@ builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 // ----- Local time of the venue — court schedules are wall-clock, audit timestamps stay UTC. -----
 var time = new TimeSettings
 {
-    TimeZoneId = OptionalEnv("APP_TIME_ZONE", "Europe/Sarajevo")
+    TimeZoneId = OptionalEnv("APP_TIME_ZONE", "Europe/Sarajevo"),
+    SweepIntervalMinutes = int.TryParse(OptionalEnv("RESERVATION_SWEEP_MINUTES", "5"), out var sweep) ? sweep : 5
 };
 builder.Services.AddSingleton(Options.Create(time));
 

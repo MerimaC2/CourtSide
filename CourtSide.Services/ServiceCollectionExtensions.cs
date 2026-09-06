@@ -49,8 +49,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IReportService, ReportService>();
 
-        // Closes out reservations whose slot has elapsed (Confirmed -> Completed).
-        services.AddHostedService<ReservationCompletionService>();
+        // Moves reservations along as time passes (Confirmed -> Completed, unconfirmed Pending -> Cancelled).
+        services.AddHostedService<ReservationLifecycleService>();
 
         // Recommender: singleton model cache, scoped query service, background re-trainer.
         services.AddSingleton<IRecommenderModel, RecommenderModel>();

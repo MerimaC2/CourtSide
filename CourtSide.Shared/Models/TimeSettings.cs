@@ -9,4 +9,7 @@ public class TimeSettings
 {
     /// <summary>IANA id (Linux/containers) or the matching Windows id; both resolve on .NET 9.</summary>
     public string TimeZoneId { get; set; } = "Europe/Sarajevo";
+
+    /// <summary>How often the reservation lifecycle sweep runs; lower it to demonstrate the sweep.</summary>
+    public int SweepIntervalMinutes { get; set; } = 5;
 }

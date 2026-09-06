@@ -47,6 +47,9 @@ public class ReservationDto
 
     /// <summary>Last moment a client can cancel; null once cancelling is no longer possible.</summary>
     public DateTimeOffset? CancelDeadlineAt { get; set; }
+
+    /// <summary>Whether an administrator may still confirm — false once the slot has started.</summary>
+    public bool CanConfirm { get; set; }
 }
 
 public class ReservationCreateDto
