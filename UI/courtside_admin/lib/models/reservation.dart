@@ -20,6 +20,10 @@ class Reservation {
   final String? paymentStatus;
   final bool isPaid;
 
+  /// Decided by the server, which owns the venue time zone: a slot that has already
+  /// started can no longer be confirmed.
+  final bool canConfirm;
+
   Reservation({
     required this.id,
     required this.reservationNumber,
@@ -41,6 +45,7 @@ class Reservation {
     this.paymentMethod,
     this.paymentStatus,
     required this.isPaid,
+    required this.canConfirm,
   });
 
   factory Reservation.fromJson(Map<String, dynamic> json) => Reservation(
@@ -64,6 +69,7 @@ class Reservation {
         paymentMethod: json['paymentMethod'] as String?,
         paymentStatus: json['paymentStatus'] as String?,
         isPaid: json['isPaid'] as bool? ?? false,
+        canConfirm: json['canConfirm'] as bool? ?? false,
       );
 
   bool get isActive => status == 'Pending' || status == 'Confirmed';

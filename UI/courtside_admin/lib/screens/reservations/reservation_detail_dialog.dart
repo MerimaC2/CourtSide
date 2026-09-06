@@ -225,7 +225,15 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
               child: Text(tr(context, 'Otkaži')),
             ),
           if (r.status == 'Pending')
-            FilledButton(onPressed: _confirm, child: Text(tr(context, 'Potvrdi'))),
+            Tooltip(
+              message: r.canConfirm
+                  ? ''
+                  : tr(context, 'Termin je već počeo — potvrda više nije moguća.'),
+              child: FilledButton(
+                onPressed: r.canConfirm ? _confirm : null,
+                child: Text(tr(context, 'Potvrdi')),
+              ),
+            ),
           const SizedBox(width: 16),
         ],
         // Closing the dialog is always the right-most action, so it keeps the same
