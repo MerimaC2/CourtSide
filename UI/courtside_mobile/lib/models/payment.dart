@@ -32,6 +32,13 @@ class Payment {
   final double? refundedAmount;
   final DateTime? refundedAt;
 
+  /// Raw processor status from a verification call, e.g. `processing` when the money is still
+  /// on its way. Closing the payment sheet does not by itself mean the card was charged.
+  final String? processorStatus;
+
+  /// Whether the payment reached a state that will not change on its own.
+  final bool isFinal;
+
   Payment({
     required this.reservationId,
     required this.method,
@@ -42,7 +49,15 @@ class Payment {
     this.paidAt,
     this.refundedAmount,
     this.refundedAt,
+    this.processorStatus,
+    this.isFinal = false,
   });
+
+  bool get isPaid => status == 'Completed';
+  bool get isFailed => status == 'Failed';
+
+  /// The charge was accepted but has not settled yet, so "paid" would be a lie.
+  bool get isProcessing => !isPaid && !isFailed;
 
   factory Payment.fromJson(Map<String, dynamic> json) => Payment(
         reservationId: json['reservationId'] as int? ?? 0,
@@ -54,5 +69,7 @@ class Payment {
         paidAt: DateTime.tryParse(json['paidAt'] as String? ?? ''),
         refundedAmount: (json['refundedAmount'] as num?)?.toDouble(),
         refundedAt: DateTime.tryParse(json['refundedAt'] as String? ?? ''),
+        processorStatus: json['processorStatus'] as String?,
+        isFinal: json['isFinal'] as bool? ?? false,
       );
 }

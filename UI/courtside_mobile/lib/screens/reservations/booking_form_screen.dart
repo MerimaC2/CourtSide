@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/translations.dart';
 import '../../models/availability_slot.dart';
 import '../../models/court.dart';
+import '../../models/payment.dart';
 import '../../models/reservation.dart';
 import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
@@ -104,12 +105,12 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
           );
 
       if (_paymentMethod == 'Cash') {
-        _goToConfirmation(reservation, paid: false);
+        _goToConfirmation(reservation);
         return;
       }
 
-      await _payWithStripe(reservation.id);
-      _goToConfirmation(reservation, paid: true);
+      final payment = await _payWithStripe(reservation.id);
+      _goToConfirmation(reservation, payment: payment);
     } on StripeException catch (e) {
       if (mounted) {
         final detail = e.error.localizedMessage ?? e.error.code;
@@ -123,7 +124,10 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
     }
   }
 
-  Future<void> _payWithStripe(int reservationId) async {
+  /// Returns what the server says about the payment. The sheet closing is only the client's
+  /// view of things; with automatic payment methods the charge can still be in flight, so the
+  /// confirmation screen must show the verified status rather than assume success.
+  Future<Payment> _payWithStripe(int reservationId) async {
     final payments = context.read<PaymentProvider>();
     final intent = await payments.createIntent(reservationId);
     Stripe.publishableKey = intent.publishableKey;
@@ -135,16 +139,15 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
       ),
     );
     await Stripe.instance.presentPaymentSheet();
-    // The sheet closing successfully is only the client's view — the server confirms
-    // the payment with Stripe directly and marks the reservation paid.
-    await payments.verify(reservationId);
+    return payments.verify(reservationId);
   }
 
-  void _goToConfirmation(Reservation reservation, {required bool paid}) {
+  /// [payment] is null for cash, where nothing is collected up front.
+  void _goToConfirmation(Reservation reservation, {Payment? payment}) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => BookingConfirmationScreen(reservation: reservation, paid: paid),
+        builder: (_) => BookingConfirmationScreen(reservation: reservation, payment: payment),
       ),
     );
   }

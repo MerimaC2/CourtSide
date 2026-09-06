@@ -1,14 +1,26 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/translations.dart';
+import '../../models/payment.dart';
 import '../../models/reservation.dart';
 import '../../utils/util.dart';
 
 class BookingConfirmationScreen extends StatelessWidget {
   final Reservation reservation;
-  final bool paid;
 
-  const BookingConfirmationScreen({super.key, required this.reservation, required this.paid});
+  /// What the server verified about the card payment; null when paying cash on arrival.
+  final Payment? payment;
+
+  const BookingConfirmationScreen({super.key, required this.reservation, this.payment});
+
+  /// Only a payment the server confirmed as completed may be shown as paid — closing the
+  /// payment sheet is not proof that the card was charged.
+  String get _paymentLabel {
+    if (payment == null) return 'Plaćanje pri dolasku (gotovina)';
+    if (payment!.isPaid) return 'Plaćeno online';
+    if (payment!.isFailed) return 'Plaćanje nije uspjelo — rezervacija je neplaćena';
+    return 'Plaćanje je u obradi';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,15 +59,26 @@ class BookingConfirmationScreen extends StatelessWidget {
                     _row(context, 'Datum', formatDisplayDate(reservation.date)),
                     _row(context, 'Termin', reservation.timeRange),
                     _row(context, 'Iznos', formatPrice(reservation.totalPrice)),
-                    _row(
-                      context,
-                      'Plaćanje',
-                      trMessage(context, paid ? 'Plaćeno online' : 'Plaćanje pri dolasku (gotovina)'),
-                    ),
+                    _row(context, 'Plaćanje', trMessage(context, _paymentLabel)),
                   ],
                 ),
               ),
             ),
+            if (payment != null && payment!.isProcessing) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      tr(context, 'Konačan status plaćanja vidjet ćete u Mojim rezervacijama.'),
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,

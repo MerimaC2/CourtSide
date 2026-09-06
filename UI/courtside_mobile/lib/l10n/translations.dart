@@ -134,6 +134,9 @@ const Map<String, String> _dict = {
   'Iznos': 'Amount',
   'Plaćanje': 'Payment',
   'Plaćeno online': 'Paid online',
+  'Plaćanje je u obradi': 'Payment is being processed',
+  'Plaćanje nije uspjelo — rezervacija je neplaćena': 'Payment failed — the reservation is unpaid',
+  'Konačan status plaćanja vidjet ćete u Mojim rezervacijama.': 'You will see the final payment status in My reservations.',
   'Plaćanje pri dolasku (gotovina)': 'Payment on arrival (cash)',
   'Nazad na terene': 'Back to courts',
 
