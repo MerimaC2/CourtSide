@@ -90,7 +90,27 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
       final payment = await context.read<PaymentProvider>().refund(_reservation.id);
       if (!mounted) return;
       if (payment != null) setState(() => _payment = payment);
-      showSuccess(context, 'Refund je pokrenut.');
+      // Cash is only owed at this point; the card refund is already settled with the processor.
+      showSuccess(context,
+          payment?.status == 'RefundPending'
+              ? 'Povrat je odobren — potvrdite ga kada gotovina bude vraćena.'
+              : 'Povrat je izvršen.');
+    } catch (e) {
+      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmCashRefund() async {
+    if (!await _confirmAction('Da li je gotovina fizički vraćena klijentu?')) return;
+    if (!mounted) return;
+    setState(() => _busy = true);
+    try {
+      final payment = await context.read<PaymentProvider>().confirmCashRefund(_reservation.id);
+      if (!mounted) return;
+      setState(() => _payment = payment);
+      showSuccess(context, 'Povrat gotovine je potvrđen.');
     } catch (e) {
       if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -203,19 +223,27 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
         else ...[
           // Payment actions (mark paid / refund) grouped separately from the
           // reservation-status actions that follow them.
-          if (_payment != null &&
-              _payment!.method == 'Cash' &&
-              _payment!.status == 'Pending')
+          // Which payment actions are offered is decided by the server's payment rules, so a
+          // button can never appear for a combination the API would refuse.
+          if (_payment?.canCollectCash == true)
             OutlinedButton(onPressed: _payCash, child: Text(tr(context, 'Označi kao plaćeno'))),
-          if (_payment != null && _payment!.status == 'Completed')
+          // Cancelling a paid reservation starts the refund on its own, so this button is the
+          // recovery path: it appears when that refund never ran or came back failed.
+          if (_payment?.canRefund == true)
             OutlinedButton(
               style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
               onPressed: _refund,
-              child: Text(tr(context, 'Refundiraj')),
+              child: Text(tr(context,
+                  _payment!.status == 'RefundFailed' ? 'Ponovi povrat' : 'Pokreni povrat')),
             ),
-          if ((_payment != null &&
-                  ((_payment!.method == 'Cash' && _payment!.status == 'Pending') ||
-                      _payment!.status == 'Completed')) &&
+          if (_payment?.canConfirmCashRefund == true)
+            FilledButton(
+              onPressed: _confirmCashRefund,
+              child: Text(tr(context, 'Potvrdi povrat gotovine')),
+            ),
+          if ((_payment?.canCollectCash == true ||
+                  _payment?.canRefund == true ||
+                  _payment?.canConfirmCashRefund == true) &&
               (r.isActive || r.status == 'Pending'))
             const SizedBox(width: 16),
           if (r.isActive)
@@ -266,9 +294,31 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
         const SizedBox(height: 6),
         _row(context, 'Iznos', formatPrice(payment.amount)),
         _row(context, 'Status', translatePaymentStatus(context, payment.status)),
-        if (payment.paidAt != null) _row(context, 'Plaćeno', payment.paidAt.toString()),
+        if (payment.paidAt != null)
+          _row(context, 'Plaćeno', formatDateTime(payment.paidAt!)),
+        if (payment.refundRequestedAt != null && payment.refundedAt == null)
+          _row(context, 'Povrat zatražen', formatDateTime(payment.refundRequestedAt!)),
         if (payment.refundedAmount != null)
           _row(context, 'Refundirano', formatPrice(payment.refundedAmount)),
+        if (payment.refundedAt != null)
+          _row(context, 'Povrat izvršen', formatDateTime(payment.refundedAt!)),
+        if (payment.refundFailureReason != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, size: 16, color: Theme.of(context).colorScheme.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${tr(context, 'Razlog neuspjeha')}: ${payment.refundFailureReason}',
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

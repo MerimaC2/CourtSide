@@ -43,6 +43,8 @@ String translatePaymentStatus(BuildContext context, String status) {
     'Completed' => 'Plaćeno',
     'Refunded' => 'Refundirano',
     'Failed' => 'Neuspjelo',
+    'RefundPending' => 'Povrat u toku',
+    'RefundFailed' => 'Povrat neuspješan',
     _ => status,
   };
 }
@@ -93,3 +95,6 @@ void showSuccess(BuildContext context, String message) {
     SnackBar(content: Text(trMessage(context, message)), backgroundColor: kPrimaryColor),
   );
 }
+
+/// Formats a UTC audit timestamp in the viewer's local time.
+String formatDateTime(DateTime value) => DateFormat('dd.MM.yyyy. HH:mm').format(value.toLocal());

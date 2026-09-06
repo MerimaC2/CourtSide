@@ -29,4 +29,14 @@ class PaymentProvider extends BaseProvider<Payment> {
     if (response.body.isEmpty) return null;
     return fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
+
+  /// Records that cash was physically handed back; only then is the refund considered done.
+  Future<Payment> confirmCashRefund(int reservationId) async {
+    final response = await http.post(
+      Uri.parse('${BaseProvider.baseUrl}$endpoint/$reservationId/refund/confirm-cash'),
+      headers: createHeaders(),
+    );
+    isValidResponse(response);
+    return fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
 }

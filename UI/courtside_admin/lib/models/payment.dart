@@ -8,6 +8,14 @@ class Payment {
   final DateTime? paidAt;
   final double? refundedAmount;
   final DateTime? refundedAt;
+  final String? refundFailureReason;
+  final DateTime? refundRequestedAt;
+
+  /// Which actions the payment rules allow right now — decided by the server so the buttons
+  /// can never offer something the API would refuse.
+  final bool canCollectCash;
+  final bool canRefund;
+  final bool canConfirmCashRefund;
 
   Payment({
     required this.reservationId,
@@ -19,6 +27,11 @@ class Payment {
     this.paidAt,
     this.refundedAmount,
     this.refundedAt,
+    this.refundFailureReason,
+    this.refundRequestedAt,
+    this.canCollectCash = false,
+    this.canRefund = false,
+    this.canConfirmCashRefund = false,
   });
 
   factory Payment.fromJson(Map<String, dynamic> json) => Payment(
@@ -31,5 +44,10 @@ class Payment {
         paidAt: DateTime.tryParse(json['paidAt'] as String? ?? ''),
         refundedAmount: (json['refundedAmount'] as num?)?.toDouble(),
         refundedAt: DateTime.tryParse(json['refundedAt'] as String? ?? ''),
+        refundFailureReason: json['refundFailureReason'] as String?,
+        refundRequestedAt: DateTime.tryParse(json['refundRequestedAt'] as String? ?? ''),
+        canCollectCash: json['canCollectCash'] as bool? ?? false,
+        canRefund: json['canRefund'] as bool? ?? false,
+        canConfirmCashRefund: json['canConfirmCashRefund'] as bool? ?? false,
       );
 }
