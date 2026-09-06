@@ -1,5 +1,6 @@
 using CourtSide.Core.Dto;
 using CourtSide.Core.Entities;
+using CourtSide.Core.Enumerations;
 using CourtSide.Core.Exceptions;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Infrastructure;
@@ -25,9 +26,14 @@ public interface ICourtService : ICrudService<CourtDto, CourtUpsertDto, CourtSea
 public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, CourtSearchObject>, ICourtService
 {
     private readonly ICurrentUser _currentUser;
+    private readonly IAppClock _clock;
 
-    public CourtService(DatabaseContext context, IMapper mapper, ICurrentUser currentUser) : base(context, mapper)
-        => _currentUser = currentUser;
+    public CourtService(DatabaseContext context, IMapper mapper, ICurrentUser currentUser, IAppClock clock)
+        : base(context, mapper)
+    {
+        _currentUser = currentUser;
+        _clock = clock;
+    }
 
     protected override IQueryable<Court> Include(IQueryable<Court> query) =>
         query.Include(x => x.Sport).Include(x => x.SportCenter).Include(x => x.Images)
@@ -49,6 +55,8 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
 
     protected override async Task BeforeUpdateAsync(CourtUpsertDto dto, Court entity)
     {
+        await EnsureNoBookingsOutsideAsync(entity.Id, dto.WorkingHours);
+
         // The mapped entity was loaded without its children, so they are fetched here
         // before being replaced with what the form submitted.
         await Context.Entry(entity).Collection(x => x.WorkingHours).LoadAsync();
@@ -56,20 +64,52 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
     }
 
     /// <summary>
-    /// Replaces the court's opening hours with the submitted set. Availability is derived
-    /// from these, so a court saved without any would have no bookable slots; in that case
-    /// a standard full-week schedule is used instead of leaving the court unusable.
+    /// Refuses a schedule change that would strand existing bookings. Closing a weekday or
+    /// narrowing its hours does not cancel anything, so without this the client would keep a
+    /// confirmed booking for a time the court is now closed, while the slot itself disappears
+    /// from the schedule. The administrator has to cancel those reservations first, the same way
+    /// reference data in use cannot simply be deleted.
+    /// </summary>
+    private async Task EnsureNoBookingsOutsideAsync(int courtId, List<CourtWorkingHoursDto> newHours)
+    {
+        var today = _clock.Today;
+        var timeOfDay = _clock.LocalTimeOfDay;
+
+        var upcoming = await Context.Reservations
+            .Where(r => r.CourtId == courtId &&
+                        (r.Status == ReservationStatus.Pending || r.Status == ReservationStatus.Confirmed) &&
+                        (r.Date > today || (r.Date == today && r.StartTime > timeOfDay)))
+            .Select(r => new { r.Date, r.StartTime, r.EndTime })
+            .ToListAsync();
+
+        var stranded = upcoming.Any(r =>
+        {
+            var day = newHours.FirstOrDefault(h => h.DayOfWeek == r.Date.DayOfWeek);
+            return day is null || r.StartTime < day.OpenTime || r.EndTime > day.CloseTime;
+        });
+
+        if (!stranded) return;
+
+        // Deliberately without a list: there can be many, and the administrator finds them in the
+        // reservations screen anyway.
+        throw new BusinessException(
+            "Postoje aktivne rezervacije izvan novog rasporeda. Otkažite ih prije izmjene radnog vremena.");
+    }
+
+    /// <summary>
+    /// Replaces the court's opening hours with exactly the submitted set. An empty set means the
+    /// court is closed and has no bookable slots, matching what <c>CourtUpsertDto</c> documents;
+    /// substituting a default schedule here would silently rewrite the caller's intent, which is
+    /// particularly dangerous on edit.
     /// </summary>
     private void ApplyWorkingHours(CourtUpsertDto dto, Court entity)
     {
-        var hours = dto.WorkingHours.Count > 0 ? dto.WorkingHours : DefaultWorkingHours();
-
         foreach (var existing in entity.WorkingHours.ToList())
             Context.Remove(existing);
         entity.WorkingHours.Clear();
 
         var now = DateTime.UtcNow;
-        foreach (var day in hours)
+        foreach (var day in dto.WorkingHours)
         {
             if (day.CloseTime <= day.OpenTime)
                 throw new BusinessException("Vrijeme zatvaranja mora biti nakon vremena otvaranja.");
@@ -84,15 +124,6 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
         }
     }
 
-    private static List<CourtWorkingHoursDto> DefaultWorkingHours() =>
-        Enumerable.Range(0, 7)
-            .Select(day => new CourtWorkingHoursDto
-            {
-                DayOfWeek = (DayOfWeek)day,
-                OpenTime = new TimeOnly(8, 0),
-                CloseTime = new TimeOnly(22, 0)
-            })
-            .ToList();
 
     protected override IQueryable<Court> ApplyFilter(IQueryable<Court> query, CourtSearchObject search)
     {

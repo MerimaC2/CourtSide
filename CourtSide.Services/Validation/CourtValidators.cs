@@ -28,5 +28,15 @@ public class CourtUpsertDtoValidator : AbstractValidator<CourtUpsertDto>
         RuleFor(x => x.SportId).GreaterThan(0).WithMessage("Odaberite sport.");
         RuleFor(x => x.SportCenterId).GreaterThan(0).WithMessage("Odaberite sportski centar.");
         RuleFor(x => x.PricePerHour).GreaterThan(0).WithMessage("Cijena po satu mora biti veća od 0.");
+
+        RuleForEach(x => x.WorkingHours)
+            .Must(day => day.CloseTime > day.OpenTime)
+            .WithMessage("Vrijeme zatvaranja mora biti nakon vremena otvaranja.");
+
+        // Availability reads one row per weekday while the occupancy report sums them all, so a
+        // duplicated day would make the same court produce two different answers.
+        RuleFor(x => x.WorkingHours)
+            .Must(hours => hours.Select(h => h.DayOfWeek).Distinct().Count() == hours.Count)
+            .WithMessage("Radno vrijeme može imati samo jedan unos po danu u sedmici.");
     }
 }
