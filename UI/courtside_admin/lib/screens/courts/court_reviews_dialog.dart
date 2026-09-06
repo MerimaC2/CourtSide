@@ -126,7 +126,7 @@ class _CourtReviewsDialogState extends State<CourtReviewsDialog> {
               ),
             ),
             Text(
-              DateFormat('dd.MM.yyyy.').format(review.createdAt),
+              DateFormat('dd.MM.yyyy.').format(review.createdAt.toLocal()),
               style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             ),
           ],

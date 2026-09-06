@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using CourtSide.Api.Json;
 using CourtSide.Api.Middleware;
 using CourtSide.Core.Entities.Identity;
 using CourtSide.Infrastructure;
@@ -144,7 +145,11 @@ builder.Services.AddControllers(options =>
         // types also emit MVC's own English "field is required" text alongside them.
         options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
     })
-    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+    .AddJsonOptions(o =>
+    {
+        o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        o.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+    });
 builder.Services.AddFluentValidationAutoValidation();
 builder.Services.AddSignalR();
 
