@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart';
 import 'package:http/io_client.dart';
@@ -12,6 +13,10 @@ import 'base_provider.dart';
 /// Authentication against POST /api/auth/login and /api/auth/register.
 /// Stores the JWT + claims in [Authorization].
 class AuthProvider with ChangeNotifier {
+  /// Telling the server about the sign-out is best effort, so the request is capped: an
+  /// unreachable API must not leave the user stuck on a screen they asked to leave.
+  static const _logoutTimeout = Duration(seconds: 3);
+
   static String get _baseUrl => BaseProvider.baseUrl;
   late final IOClient _http;
 
@@ -82,12 +87,16 @@ class AuthProvider with ChangeNotifier {
     final token = Authorization.token;
     if (token != null && token.isNotEmpty) {
       try {
-        await _http.post(
-          Uri.parse('uth/logout'),
-          headers: {'Authorization': 'Bearer '},
-        );
-      } catch (_) {
-        // Offline or server unreachable — the local sign-out below still applies.
+        await _http
+            .post(
+              Uri.parse('${_baseUrl}auth/logout'),
+              headers: {'Authorization': 'Bearer $token'},
+            )
+            .timeout(_logoutTimeout);
+      } catch (e) {
+        // Offline, unreachable or too slow — the local sign-out below still applies,
+        // but the token stays valid on the server until it expires.
+        debugPrint('Odjava na serveru nije uspjela: $e');
       }
     }
     Authorization.clear();
