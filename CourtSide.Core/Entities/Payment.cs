@@ -17,6 +17,24 @@ public class Payment : BaseEntity
     public string? StripePaymentIntentId { get; set; }
     public DateTime? PaidAt { get; set; }
 
+    /// <summary>Administrator who recorded a cash payment; null for online payments.</summary>
+    public int? PaidById { get; set; }
+
     public decimal? RefundedAmount { get; set; }
     public DateTime? RefundedAt { get; set; }
+
+    // A refund reaches outside the database, so the intent is recorded before the call and the
+    // outcome after it. Without that trail a crash mid-refund would leave money owed and no sign of it.
+
+    /// <summary>Stripe refund id, so the final status can be confirmed against the processor.</summary>
+    public string? StripeRefundId { get; set; }
+
+    /// <summary>When the refund was initiated — set before the processor is contacted.</summary>
+    public DateTime? RefundRequestedAt { get; set; }
+
+    /// <summary>Why the refund failed, kept so an administrator can act on it.</summary>
+    public string? RefundFailureReason { get; set; }
+
+    /// <summary>Administrator who confirmed that cash was handed back; null for online refunds.</summary>
+    public int? RefundConfirmedById { get; set; }
 }

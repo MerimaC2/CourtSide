@@ -559,6 +559,19 @@ namespace CourtSide.Infrastructure.Migrations
                     b.Property<DateTime?>("PaidAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("PaidById")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RefundConfirmedById")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RefundFailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RefundRequestedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal?>("RefundedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -574,6 +587,10 @@ namespace CourtSide.Infrastructure.Migrations
 
                     b.Property<string>("StripePaymentIntentId")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StripeRefundId")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");

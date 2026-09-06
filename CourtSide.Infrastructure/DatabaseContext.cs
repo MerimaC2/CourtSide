@@ -63,6 +63,8 @@ public class DatabaseContext : IdentityDbContext<ApplicationUser, ApplicationRol
         // ----- Unique constraints. -----
         builder.Entity<Reservation>().HasIndex(x => x.ReservationNumber).IsUnique();
         builder.Entity<Payment>().HasIndex(x => x.ReservationId).IsUnique();
+        builder.Entity<Payment>().Property(x => x.StripeRefundId).HasMaxLength(255);
+        builder.Entity<Payment>().Property(x => x.RefundFailureReason).HasMaxLength(500);
 
         // ----- Helpful indexes for filtering. -----
         builder.Entity<Reservation>().HasIndex(x => new { x.CourtId, x.Date });
