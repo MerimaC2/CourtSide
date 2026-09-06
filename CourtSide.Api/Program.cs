@@ -56,6 +56,13 @@ var rabbit = new RabbitMqSettings
 builder.Services.AddSingleton(Options.Create(rabbit));
 builder.Services.AddSingleton<IMessagePublisher, RabbitMqPublisher>();
 
+// ----- Local time of the venue — court schedules are wall-clock, audit timestamps stay UTC. -----
+var time = new TimeSettings
+{
+    TimeZoneId = OptionalEnv("APP_TIME_ZONE", "Europe/Sarajevo")
+};
+builder.Services.AddSingleton(Options.Create(time));
+
 // ----- Stripe (sandbox) — optional: empty keys disable online payments, cash still works. -----
 var stripe = new StripeSettings
 {

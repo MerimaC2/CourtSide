@@ -8,9 +8,10 @@ RUN dotnet publish CourtSide.Api/CourtSide.Api.csproj -c Release -o /app/publish
 # Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
-# Native deps: libgomp1 (ML.NET Matrix Factorization / recommender), libfontconfig1 (SkiaSharp/QuestPDF reports).
+# Native deps: libgomp1 (ML.NET Matrix Factorization / recommender), libfontconfig1 (SkiaSharp/QuestPDF reports),
+# tzdata (time zone database — court schedules are local wall-clock, see AppClock).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 libfontconfig1 \
+    && apt-get install -y --no-install-recommends libgomp1 libfontconfig1 tzdata \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 EXPOSE 80

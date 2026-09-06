@@ -9,6 +9,7 @@ using FluentValidation;
 using Mapster;
 using MapsterMapper;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CourtSide.Services;
 
@@ -26,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddValidatorsFromAssemblyContaining<CourtUpsertDtoValidator>();
 
         // Cross-cutting
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IAppClock, AppClock>();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
