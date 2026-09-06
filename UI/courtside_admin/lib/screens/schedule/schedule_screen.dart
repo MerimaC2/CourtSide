@@ -310,17 +310,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         _legendItem(kPrimaryColor, 'Slobodno (klik za blokiranje)'),
         _legendItem(Colors.grey, 'Rezervisano'),
         _legendItem(Colors.red.shade300, 'Blokirano (klik za odblokiranje)'),
+        _legendItem(Colors.grey.shade400, 'Istekao termin', struck: true),
       ],
     );
   }
 
-  Widget _legendItem(Color color, String label) {
+  Widget _legendItem(Color color, String label, {bool struck = false}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 6),
-        Text(tr(context, label), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+        Text(
+          tr(context, label),
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey.shade700,
+            decoration: struck ? TextDecoration.lineThrough : null,
+          ),
+        ),
       ],
     );
   }
@@ -337,21 +345,35 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       default:
         color = kPrimaryColor;
     }
+
+    // A slot that has started keeps its status colour but is drawn faded and struck through,
+    // so a reserved past slot still reads as reserved while being clearly spent.
+    final tile = Container(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: slot.isPast ? 0.04 : 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: slot.isPast ? color.withValues(alpha: 0.35) : color),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        slot.label,
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: slot.isPast ? color.withValues(alpha: 0.5) : color,
+          decoration: slot.isPast ? TextDecoration.lineThrough : null,
+          decorationColor: color.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+
+    if (slot.isPast) {
+      return Tooltip(message: tr(context, 'Termin je istekao.'), child: tile);
+    }
+
     return InkWell(
       onTap: () => _onSlotTap(slot),
       borderRadius: BorderRadius.circular(10),
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          slot.label,
-          style: TextStyle(fontWeight: FontWeight.w600, color: color),
-        ),
-      ),
+      child: tile,
     );
   }
 }
