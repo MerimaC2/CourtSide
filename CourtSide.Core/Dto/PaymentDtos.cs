@@ -23,4 +23,21 @@ public class PaymentDto
     public DateTime? PaidAt { get; set; }
     public decimal? RefundedAmount { get; set; }
     public DateTime? RefundedAt { get; set; }
+
+    public string? StripeRefundId { get; set; }
+    public DateTime? RefundRequestedAt { get; set; }
+    public string? RefundFailureReason { get; set; }
+
+    // Which actions the rules allow right now, decided by PaymentPolicy on the server so the apps
+    // never re-implement the table and can never offer a button the server would refuse.
+    public bool CanCollectCash { get; set; }
+    public bool CanStartOnlinePayment { get; set; }
+    public bool CanRefund { get; set; }
+    public bool CanConfirmCashRefund { get; set; }
+
+    /// <summary>Raw processor status, filled only by the verification call.</summary>
+    public string? ProcessorStatus { get; set; }
+
+    /// <summary>Whether the payment has reached a state that will not change on its own.</summary>
+    public bool IsFinal { get; set; }
 }

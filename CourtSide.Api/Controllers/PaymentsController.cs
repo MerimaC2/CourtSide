@@ -45,6 +45,12 @@ public class PaymentsController : ControllerBase
         return result is null ? NoContent() : Ok(result);
     }
 
+    /// <summary>Admin: confirms that a cash refund was physically handed back to the client.</summary>
+    [HttpPost("{reservationId:int}/refund/confirm-cash")]
+    [Authorize(Roles = Roles.Admin)]
+    public async Task<ActionResult<PaymentDto>> ConfirmCashRefund(int reservationId)
+        => Ok(await _payments.ConfirmCashRefundAsync(reservationId));
+
     /// <summary>Stripe webhook (payment confirmations). Verified via the Stripe-Signature header.</summary>
     [HttpPost("webhook")]
     [AllowAnonymous]

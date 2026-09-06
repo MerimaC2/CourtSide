@@ -1,3 +1,4 @@
+using CourtSide.Services.Payments;
 using CourtSide.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -54,6 +55,13 @@ public class ReservationLifecycleService : BackgroundService
                 _logger.LogInformation(
                     "Obrada isteklih rezervacija: završeno {Completed}, otkazano nepotvrđenih {Expired}.",
                     completed, expired);
+
+            // A refund can be left pending if the provider was slow or the webhook never arrived,
+            // so the same pass settles those against Stripe rather than leaving money in limbo.
+            var payments = scope.ServiceProvider.GetRequiredService<IPaymentService>();
+            var settled = await payments.ReconcilePendingRefundsAsync(cancellationToken);
+            if (settled > 0)
+                _logger.LogInformation("Zatvoreno {Count} povrata koji su čekali potvrdu provajdera.", settled);
         }
         catch (Exception ex)
         {
