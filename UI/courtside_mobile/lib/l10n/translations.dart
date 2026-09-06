@@ -157,7 +157,11 @@ const Map<String, String> _dict = {
   'Otkazana': 'Cancelled',
   'Završena': 'Completed',
 
+  'Zatvori poruku': 'Dismiss',
+
   // Backend errors (from CourtSide.Services BusinessException/NotFoundException messages)
+  'Odaberite termin iz ponuđenog rasporeda terena.': 'Choose a slot from the court schedule.',
+  'Rezervacija nije potvrđena prije početka termina.': 'The reservation was not confirmed before the slot started.',
   'Pogrešno korisničko ime ili lozinka.': 'Incorrect username or password.',
   'Korisničko ime je već zauzeto.': 'This username is already taken.',
   'Email adresa je već registrovana.': 'This email address is already registered.',

@@ -83,6 +83,11 @@ const Map<String, String> _dict = {
       'Closing time must be after opening time.',
 
   // Schedule
+  'Postoje aktivne rezervacije izvan novog rasporeda. Otkažite ih prije izmjene radnog vremena.':
+      'There are active reservations outside the new schedule. Cancel them before changing the working hours.',
+  'Zatvori poruku': 'Dismiss',
+  'Termin je istekao.': 'This slot has passed.',
+  'Istekao termin': 'Passed slot',
   'Nema terena. Prvo dodajte teren.': 'No courts. Add a court first.',
   'Teren': 'Court',
   'Datum': 'Date',
@@ -102,6 +107,17 @@ const Map<String, String> _dict = {
   'Razlog blokade': 'Block reason',
 
   // Reservations
+  'Termin je već počeo — potvrda više nije moguća.': 'The slot has already started — it can no longer be confirmed.',
+  'Termin je već počeo — rezervaciju više nije moguće potvrditi.': 'The slot has already started — the reservation can no longer be confirmed.',
+  'Rezervacija nije potvrđena prije početka termina.': 'The reservation was not confirmed before the slot started.',
+  'Odaberite termin iz ponuđenog rasporeda terena.': 'Choose a slot from the court schedule.',
+  'Blokada mora obuhvatati cijele termine iz rasporeda terena.': 'A block must cover whole slots from the court schedule.',
+  'U tom periodu već postoji rezervacija pa se ne može blokirati.': 'That period already has a reservation, so it cannot be blocked.',
+  'Taj period je već blokiran.': 'That period is already blocked.',
+  'Teren ne radi tog dana pa nema šta blokirati.': 'The court is closed that day, so there is nothing to block.',
+  'Termin je već počeo — blokada se može postaviti samo unaprijed.': 'The slot has already started — blocks can only be set in advance.',
+  'Radno vrijeme može imati samo jedan unos po danu u sedmici.': 'Working hours may have only one entry per weekday.',
+  'Teren više nije aktivan — rezervaciju nije moguće potvrditi.': 'The court is no longer active — the reservation cannot be confirmed.',
   'Ukupno': 'Total',
   'Stranica': 'Page',
   'Prethodna stranica': 'Previous page',

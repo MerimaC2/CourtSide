@@ -11,7 +11,6 @@ import '../../models/sport_center.dart';
 import '../../providers/base_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/image_validation.dart';
-import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
 
 class CourtFormResult {
@@ -78,6 +77,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   bool _isActive = true;
   Uint8List? _imageBytes;
   String? _imageError;
+  String? _workingHoursError;
   String? _imageFilename;
   String? _imageContentType;
 
@@ -297,6 +297,23 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
               ),
             ],
           ),
+        if (_workingHoursError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.error_outline, size: 16, color: Theme.of(context).colorScheme.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    trMessage(context, _workingHoursError!),
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }
@@ -305,9 +322,12 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     if (!_formKey.currentState!.validate()) return;
     if (_sportId == null || _sportCenterId == null) return;
     if (!_workingHoursValid()) {
-      showError(context, "Teren mora biti otvoren barem jedan dan, a zatvaranje mora biti nakon otvaranja.");
+      // Shown inside the dialog: a snackbar would land behind the modal barrier.
+      setState(() => _workingHoursError =
+          "Teren mora biti otvoren barem jedan dan, a zatvaranje mora biti nakon otvaranja.");
       return;
     }
+    setState(() => _workingHoursError = null);
     Navigator.of(context).pop(
       CourtFormResult(
         name: _nameController.text.trim(),

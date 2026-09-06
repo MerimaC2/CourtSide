@@ -37,9 +37,23 @@ String translateReservationStatus(BuildContext context, String status) {
 
 /// Shows a red error snackbar with [message] (translated if it matches a
 /// known backend/client message and English is selected).
+/// Errors stay until the user dismisses them. The default four seconds is meant for short
+/// confirmations, which is not enough for a message that explains why an action was refused —
+/// and unlike a confirmation, an error is the only record the user gets that nothing was saved.
 void showError(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(trMessage(context, message)), backgroundColor: Colors.red),
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.clearSnackBars(); // a new failure replaces the previous one instead of queueing
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(trMessage(context, message)),
+      backgroundColor: Colors.red,
+      duration: const Duration(days: 1),
+      action: SnackBarAction(
+        label: trMessage(context, 'Zatvori poruku'),
+        textColor: Colors.white,
+        onPressed: messenger.hideCurrentSnackBar,
+      ),
+    ),
   );
 }
 
