@@ -62,20 +62,55 @@ public class EmailConsumerWorker : BackgroundService
         var consumer = new AsyncEventingBasicConsumer(_channel);
         consumer.Received += async (_, ea) =>
         {
-            var json = Encoding.UTF8.GetString(ea.Body.ToArray());
-            var message = JsonSerializer.Deserialize<EmailMessage>(json);
-
-            if (message is not null && !await TrySendWithRetryAsync(message))
+            try
             {
-                _channel!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
-                return;
-            }
+                EmailMessage? message;
+                try
+                {
+                    var json = Encoding.UTF8.GetString(ea.Body.ToArray());
+                    message = JsonSerializer.Deserialize<EmailMessage>(json);
+                }
+                catch (JsonException ex)
+                {
+                    // A malformed payload will never succeed on a retry, so it is rejected without
+                    // requeueing. Left unacknowledged it would stay unacknowledged and stall the queue.
+                    _logger.LogError(ex, "Neispravna poruka u redu '{Queue}': {Payload}", _rabbit.Queue, Excerpt(ea));
+                    _channel!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
+                    return;
+                }
 
-            _channel!.BasicAck(ea.DeliveryTag, multiple: false);
+                if (message is null || string.IsNullOrWhiteSpace(message.To))
+                {
+                    _logger.LogError("Poruka bez primaoca u redu '{Queue}': {Payload}", _rabbit.Queue, Excerpt(ea));
+                    _channel!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
+                    return;
+                }
+
+                if (!await TrySendWithRetryAsync(message))
+                {
+                    _channel!.BasicNack(ea.DeliveryTag, multiple: false, requeue: false);
+                    return;
+                }
+
+                _channel!.BasicAck(ea.DeliveryTag, multiple: false);
+            }
+            catch (Exception ex)
+            {
+                // The consumer callback is the outermost frame here — an escaping exception would
+                // leave the delivery in limbo, so it is logged rather than thrown.
+                _logger.LogError(ex, "Neočekivana greška pri obradi poruke iz reda '{Queue}'.", _rabbit.Queue);
+            }
         };
 
         _channel.BasicConsume(_rabbit.Queue, autoAck: false, consumer);
         _logger.LogInformation("Worker sluša RabbitMQ red '{Queue}'.", _rabbit.Queue);
+    }
+
+    /// <summary>Start of a payload we could not process, so the log shows what arrived.</summary>
+    private static string Excerpt(BasicDeliverEventArgs args)
+    {
+        var text = Encoding.UTF8.GetString(args.Body.ToArray());
+        return text.Length <= 200 ? text : text[..200] + "...";
     }
 
     /// <summary>Retries a failed send with exponential backoff (1s, 2s, 4s, 8s) before giving up.</summary>
