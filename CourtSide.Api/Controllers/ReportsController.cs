@@ -1,5 +1,6 @@
 using CourtSide.Services.Reports;
 using CourtSide.Shared.Constants;
+using CourtSide.Shared.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,8 +12,13 @@ namespace CourtSide.Api.Controllers;
 public class ReportsController : ControllerBase
 {
     private readonly IReportService _reports;
+    private readonly IAppClock _clock;
 
-    public ReportsController(IReportService reports) => _reports = reports;
+    public ReportsController(IReportService reports, IAppClock clock)
+    {
+        _reports = reports;
+        _clock = clock;
+    }
 
     /// <summary>Reservations + revenue PDF report for a period (optional sport-center filter).</summary>
     [HttpGet("reservations")]
@@ -23,7 +29,7 @@ public class ReportsController : ControllerBase
         // The report is rendered server-side, so the client passes the language it is
         // currently displaying in.
         var pdf = await _reports.ReservationsPdfAsync(dateFrom, dateTo, sportCenterId, language);
-        return File(pdf, "application/pdf", $"rezervacije_{DateTime.UtcNow:yyyyMMdd_HHmm}.pdf");
+        return File(pdf, "application/pdf", $"rezervacije_{_clock.LocalNow:yyyyMMdd_HHmm}.pdf");
     }
 
     /// <summary>Court occupancy PDF: most requested slots and occupancy per court.</summary>
@@ -33,6 +39,6 @@ public class ReportsController : ControllerBase
         [FromQuery] string? language = null)
     {
         var pdf = await _reports.OccupancyPdfAsync(dateFrom, dateTo, sportCenterId, language);
-        return File(pdf, "application/pdf", $"popunjenost_{DateTime.UtcNow:yyyyMMdd_HHmm}.pdf");
+        return File(pdf, "application/pdf", $"popunjenost_{_clock.LocalNow:yyyyMMdd_HHmm}.pdf");
     }
 }

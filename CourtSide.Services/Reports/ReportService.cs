@@ -1,6 +1,7 @@
 using CourtSide.Core.Enumerations;
 using CourtSide.Core.Helpers;
 using CourtSide.Infrastructure;
+using CourtSide.Shared.Services;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -25,8 +26,13 @@ public class ReportService : IReportService
     static ReportService() => QuestPDF.Settings.License = LicenseType.Community;
 
     private readonly DatabaseContext _db;
+    private readonly IAppClock _clock;
 
-    public ReportService(DatabaseContext db) => _db = db;
+    public ReportService(DatabaseContext db, IAppClock clock)
+    {
+        _db = db;
+        _clock = clock;
+    }
 
     public async Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
         string? language = null)
@@ -75,7 +81,7 @@ public class ReportService : IReportService
 
         var periodText = $"{(dateFrom.HasValue ? dateFrom.Value.ToString("dd.MM.yyyy") : labels.PeriodStart)}" +
                          $" – {(dateTo.HasValue ? dateTo.Value.ToString("dd.MM.yyyy") : labels.PeriodEnd)}";
-        var generatedAt = DateTime.UtcNow.ToString("dd.MM.yyyy HH:mm 'UTC'");
+        var generatedAt = _clock.LocalNow.ToString("dd.MM.yyyy HH:mm");
 
         var document = Document.Create(container =>
         {
@@ -229,7 +235,7 @@ public class ReportService : IReportService
 
         // Occupancy needs a bounded period so available hours can be computed;
         // when none is given the report covers the last 30 days.
-        var to = dateTo ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = dateTo ?? _clock.Today;
         var from = dateFrom ?? to.AddDays(-29);
 
         var courtsQuery = _db.Courts
@@ -280,7 +286,7 @@ public class ReportService : IReportService
         .ToList();
 
         var periodText = $"{from:dd.MM.yyyy} – {to:dd.MM.yyyy}";
-        var generatedAt = DateTime.UtcNow.ToString("dd.MM.yyyy HH:mm 'UTC'");
+        var generatedAt = _clock.LocalNow.ToString("dd.MM.yyyy HH:mm");
 
         var document = Document.Create(container =>
         {

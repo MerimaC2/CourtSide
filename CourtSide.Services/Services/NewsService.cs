@@ -20,9 +20,14 @@ public interface INewsService : ICrudService<NewsDto, NewsUpsertDto, NewsSearchO
 public class NewsService : BaseCrudService<News, NewsDto, NewsUpsertDto, NewsSearchObject>, INewsService
 {
     private readonly ICurrentUser _currentUser;
+    private readonly IAppClock _clock;
 
-    public NewsService(DatabaseContext context, IMapper mapper, ICurrentUser currentUser)
-        : base(context, mapper) => _currentUser = currentUser;
+    public NewsService(DatabaseContext context, IMapper mapper, ICurrentUser currentUser, IAppClock clock)
+        : base(context, mapper)
+    {
+        _currentUser = currentUser;
+        _clock = clock;
+    }
 
     protected override IQueryable<News> ApplyFilter(IQueryable<News> query, NewsSearchObject search)
     {
@@ -34,7 +39,7 @@ public class NewsService : BaseCrudService<News, NewsDto, NewsUpsertDto, NewsSea
         // The publish moment is a calendar date, so visibility flips at the start of that day.
         if (!_currentUser.IsAdmin)
         {
-            var today = DateTime.UtcNow.Date;
+            var today = _clock.Today.ToDateTime(TimeOnly.MinValue);
             query = query.Where(x => x.PublishedAt.Date <= today);
         }
 
@@ -43,7 +48,7 @@ public class NewsService : BaseCrudService<News, NewsDto, NewsUpsertDto, NewsSea
 
     protected override Task BeforeInsertAsync(NewsUpsertDto dto, News entity)
     {
-        entity.PublishedAt = (dto.PublishedAt ?? DateTime.UtcNow).Date;
+        entity.PublishedAt = (dto.PublishedAt ?? _clock.LocalNow).Date;
         return Task.CompletedTask;
     }
 

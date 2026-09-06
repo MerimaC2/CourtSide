@@ -35,17 +35,19 @@ public class ReservationService : IReservationService
     private readonly INotificationService _notifications;
     private readonly IMessagePublisher _publisher;
     private readonly IPaymentService _payments;
+    private readonly IAppClock _clock;
     private readonly ILogger<ReservationService> _logger;
 
     public ReservationService(DatabaseContext db, ICurrentUser currentUser,
         INotificationService notifications, IMessagePublisher publisher,
-        IPaymentService payments, ILogger<ReservationService> logger)
+        IPaymentService payments, IAppClock clock, ILogger<ReservationService> logger)
     {
         _db = db;
         _currentUser = currentUser;
         _notifications = notifications;
         _publisher = publisher;
         _payments = payments;
+        _clock = clock;
         _logger = logger;
     }
 
@@ -68,6 +70,8 @@ public class ReservationService : IReservationService
         if (!_currentUser.IsAdmin && dto.ClientId != _currentUser.UserId)
             throw new BusinessException("Nemate pristup ovoj rezervaciji.");
 
+        ApplyComputedFlags(dto);
+
         return dto;
     }
 
@@ -85,8 +89,7 @@ public class ReservationService : IReservationService
         if (dto.EndTime <= dto.StartTime)
             throw new BusinessException("Vrijeme završetka mora biti nakon vremena početka.");
 
-        var startMoment = dto.Date.ToDateTime(dto.StartTime);
-        if (startMoment <= DateTime.UtcNow)
+        if (_clock.HasPassed(dto.Date, dto.StartTime))
             throw new BusinessException("Termin rezervacije mora biti u budućnosti.");
 
         var workingHours = court.WorkingHours.FirstOrDefault(w => w.DayOfWeek == dto.Date.DayOfWeek);
@@ -195,8 +198,8 @@ public class ReservationService : IReservationService
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
 
         // Clients can cancel up to 24h before the start; admins may cancel anytime.
-        var startMoment = reservation.Date.ToDateTime(reservation.StartTime);
-        if (!_currentUser.IsAdmin && startMoment - DateTime.UtcNow < TimeSpan.FromHours(24))
+        if (!_currentUser.IsAdmin &&
+            _clock.TimeUntil(reservation.Date, reservation.StartTime) < ReservationPolicy.CancellationWindow)
             throw new BusinessException("Rezervaciju je moguće otkazati najkasnije 24 sata prije termina.");
 
         reservation.Status = ReservationStatus.Cancelled;
@@ -242,9 +245,10 @@ public class ReservationService : IReservationService
     /// </summary>
     public async Task<int> CompletePastDueAsync(CancellationToken cancellationToken = default)
     {
-        var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
-        var timeOfDay = TimeOnly.FromDateTime(now);
+        // The slot is local wall-clock; the audit stamp stays UTC.
+        var now = _clock.UtcNow;
+        var today = _clock.Today;
+        var timeOfDay = _clock.LocalTimeOfDay;
 
         // Date and time are compared separately so the filter runs in SQL instead of
         // pulling every confirmed reservation into memory.
@@ -305,7 +309,27 @@ public class ReservationService : IReservationService
             .ProjectToType<ReservationDto>()
             .ToListAsync();
 
+        foreach (var item in items) ApplyComputedFlags(item);
+
         return new PagedResult<ReservationDto> { Items = items, TotalCount = total, Page = page, PageSize = size };
+    }
+
+    /// <summary>
+    /// Fills the time-dependent fields the projection cannot produce (they need the venue's time
+    /// zone, which does not translate to SQL). The cancellation rule here is the same one
+    /// <see cref="CancelAsync"/> enforces, so the apps and the server can never disagree.
+    /// </summary>
+    private void ApplyComputedFlags(ReservationDto dto)
+    {
+        dto.StartsAt = _clock.ToInstant(dto.Date, dto.StartTime);
+        dto.EndsAt = _clock.ToInstant(dto.Date, dto.EndTime);
+
+        var cancellable = dto.Status is ReservationStatus.Pending or ReservationStatus.Confirmed;
+        var deadline = dto.StartsAt - ReservationPolicy.CancellationWindow;
+
+        dto.CancelDeadlineAt = cancellable ? deadline : null;
+        dto.CanCancel = cancellable &&
+            (_currentUser.IsAdmin || _clock.TimeUntil(dto.Date, dto.StartTime) >= ReservationPolicy.CancellationWindow);
     }
 
     private async Task SendEmailAsync(int userId, string subject, string body)
