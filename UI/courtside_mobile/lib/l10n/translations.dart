@@ -186,6 +186,9 @@ const Map<String, String> _dict = {
   'Online plaćanje nije dostupno (Stripe nije konfigurisan).': 'Online payment is unavailable (Stripe is not configured).',
   'Nevalidan Stripe potpis.': 'Invalid Stripe signature.',
   'Došlo je do greške na serveru. Pokušajte ponovo kasnije.': 'A server error occurred. Please try again later.',
+  'Podatke nije moguće sačuvati. Provjerite unos i povezane zapise.':
+      'The data could not be saved. Check the entry and the records it refers to.',
+  'Nova lozinka mora biti različita od trenutne.': 'The new password must differ from the current one.',
 
   // Client-side messages (thrown directly by BaseProvider, not the backend)
   'Sesija je istekla. Prijavite se ponovo.': 'Your session has expired. Please log in again.',
@@ -194,12 +197,16 @@ const Map<String, String> _dict = {
   'Nije pronađeno.': 'Not found.',
 };
 
-/// Entity names as they appear in NotFoundException("{entity} sa identifikatorom '{id}' nije pronađen.").
+/// Entity names as they appear in NotFoundException("Ne postoji {entity} sa identifikatorom '{id}'."), lower-cased by the server.
 const Map<String, String> _entityNames = {
-  'Rezervacija': 'Reservation',
-  'Teren': 'Court',
-  'Blokada': 'Block',
-  'Notifikacija': 'Notification',
+  'rezervacija': 'reservation',
+  'teren': 'court',
+  'blokada': 'block',
+  'notifikacija': 'notification',
+  'recenzija': 'review',
+  'obavijest': 'news item',
+  'plaćanje': 'payment',
+  'sportski centar': 'sport center',
 };
 
 const Map<String, String> _stripePrefixes = {
@@ -241,7 +248,7 @@ final List<({RegExp shape, String Function(List<String?>) build})> _notification
   ),
 ];
 
-final RegExp _notFoundPattern = RegExp(r"^(.+) sa identifikatorom '(.+)' nije pronađen\.$");
+final RegExp _notFoundPattern = RegExp(r"^Ne postoji (.+) sa identifikatorom '(.+)'\.$");
 
 String _translate(String text, AppLanguage lang) {
   if (lang == AppLanguage.bs) return text;
@@ -250,7 +257,8 @@ String _translate(String text, AppLanguage lang) {
   final notFoundMatch = _notFoundPattern.firstMatch(text);
   if (notFoundMatch != null) {
     final entity = _entityNames[notFoundMatch.group(1)] ?? notFoundMatch.group(1)!;
-    return "$entity with identifier '${notFoundMatch.group(2)}' not found.";
+    final named = entity.isEmpty ? entity : entity[0].toUpperCase() + entity.substring(1);
+    return "$named with identifier '${notFoundMatch.group(2)}' not found.";
   }
   for (final pattern in _notificationPatterns) {
     final match = pattern.shape.firstMatch(text);

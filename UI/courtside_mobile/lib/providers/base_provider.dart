@@ -87,7 +87,11 @@ abstract class BaseProvider<T> with ChangeNotifier {
       throw Exception('Sesija je istekla. Prijavite se ponovo.');
     }
     if (response.statusCode == 403) {
-      throw Exception('Nemate ovlaštenje za ovu radnju.');
+      // A role check answers with an empty body, but a service that refuses because the record
+      // belongs to someone else says why — that reason is more useful than a generic sentence.
+      final message = errorMessageFrom(response);
+      throw Exception(
+          message.startsWith('HTTP ') ? 'Nemate ovlaštenje za ovu radnju.' : message);
     }
     throw Exception(errorMessageFrom(response));
   }
