@@ -80,7 +80,9 @@ builder.Services.AddDbContext<DatabaseContext>(options => options.UseSqlServer(c
 // ----- Identity -----
 builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
     {
-        options.Password.RequiredLength = 4;
+        // Matches what registration and the change-password form promise; the seeded demo
+        // accounts keep their short password by being hashed directly (see DatabaseSeeder).
+        options.Password.RequiredLength = 6;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequireUppercase = false;
         options.Password.RequireLowercase = false;

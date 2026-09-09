@@ -61,9 +61,22 @@ public static class DatabaseSeeder
             CreatedAt = DateTime.UtcNow
         };
 
-        var result = await userManager.CreateAsync(user, password);
-        if (result.Succeeded)
-            await userManager.AddToRoleAsync(user, role);
+        // The demo accounts are documented with the password `test`, which is shorter than the
+        // six characters Identity now requires of real users. Hashing it here bypasses only the
+        // password validators for these fixed accounts; registration and password changes keep
+        // the rule. The hash is produced the same way Identity would, so sign-in is unaffected.
+        user.PasswordHash = userManager.PasswordHasher.HashPassword(user, password);
+
+        var result = await userManager.CreateAsync(user);
+        if (!result.Succeeded)
+        {
+            // Silently skipping would leave a fresh database with no way in, and the cause would
+            // only show up as a failed login much later.
+            throw new InvalidOperationException(
+                $"Seed naloga '{username}' nije uspio: {string.Join("; ", result.Errors.Select(e => e.Description))}");
+        }
+
+        await userManager.AddToRoleAsync(user, role);
     }
 
     private static async Task SeedDomainAsync(DatabaseContext db)

@@ -40,3 +40,14 @@ public class CourtUpsertDtoValidator : AbstractValidator<CourtUpsertDto>
             .WithMessage("Radno vrijeme može imati samo jedan unos po danu u sedmici.");
     }
 }
+
+public class CourtReviewUpsertDtoValidator : AbstractValidator<CourtReviewUpsertDto>
+{
+    public CourtReviewUpsertDtoValidator()
+    {
+        RuleFor(x => x.ReservationId).GreaterThan(0).WithMessage("Odaberite rezervaciju.");
+        RuleFor(x => x.Rating).InclusiveBetween(1, 5).WithMessage("Ocjena mora biti između 1 i 5.");
+        RuleFor(x => x.Comment).MaximumLength(1000)
+            .WithMessage("Komentar može imati najviše 1000 znakova.");
+    }
+}
