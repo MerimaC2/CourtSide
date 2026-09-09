@@ -1,4 +1,6 @@
+using CourtSide.Core.Entities;
 using CourtSide.Core.Enumerations;
+using CourtSide.Core.Exceptions;
 using CourtSide.Core.Helpers;
 using CourtSide.Infrastructure;
 using CourtSide.Shared.Services;
@@ -34,9 +36,35 @@ public class ReportService : IReportService
         _clock = clock;
     }
 
+    /// <summary>
+    /// A reversed period matches nothing, so the report came out empty and read as "no bookings"
+    /// instead of as a mistake in the filter.
+    /// </summary>
+    private static void EnsureValidPeriod(DateOnly? dateFrom, DateOnly? dateTo)
+    {
+        if (dateFrom.HasValue && dateTo.HasValue && dateFrom > dateTo)
+            throw new BusinessException("Datum „od“ ne može biti poslije datuma „do“.");
+    }
+
+    /// <summary>
+    /// How much of a block falls inside the court's opening hours for that date. Only that part
+    /// was ever bookable, so only that part is taken off the available total; a block on a day
+    /// the court is closed takes nothing away.
+    /// </summary>
+    private static double BlockedOpenHours(Court court, DateOnly date, TimeOnly start, TimeOnly end)
+    {
+        var day = court.WorkingHours.FirstOrDefault(w => w.DayOfWeek == date.DayOfWeek);
+        if (day is null) return 0;
+
+        var overlapStart = start > day.OpenTime ? start : day.OpenTime;
+        var overlapEnd = end < day.CloseTime ? end : day.CloseTime;
+        return overlapEnd > overlapStart ? (overlapEnd - overlapStart).TotalHours : 0;
+    }
+
     public async Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
         string? language = null)
     {
+        EnsureValidPeriod(dateFrom, dateTo);
         var labels = ReportLabels.For(language);
 
         // Filtered reports name the centre in the header; an unfiltered one covers all centres.
@@ -225,6 +253,7 @@ public class ReportService : IReportService
     public async Task<byte[]> OccupancyPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
         string? language = null)
     {
+        EnsureValidPeriod(dateFrom, dateTo);
         var labels = ReportLabels.For(language);
 
         // Filtered reports name the centre in the header; an unfiltered one covers all centres.
@@ -252,6 +281,14 @@ public class ReportService : IReportService
             .Select(r => new { r.CourtId, r.StartTime, r.EndTime })
             .ToListAsync();
 
+        // Hours the court was deliberately taken out of service are hours nobody could have
+        // booked, so they belong on neither side of the ratio.
+        var blocks = await _db.CourtAvailabilityBlocks
+            .Where(b => b.Date >= from && b.Date <= to)
+            .Where(b => !sportCenterId.HasValue || b.Court.SportCenterId == sportCenterId.Value)
+            .Select(b => new { b.CourtId, b.Date, b.StartTime, b.EndTime })
+            .ToListAsync();
+
         var topSlots = reservations
             .GroupBy(r => r.StartTime)
             .Select(g => new { Start = g.Key, Count = g.Count() })
@@ -267,8 +304,12 @@ public class ReportService : IReportService
 
         var occupancyRows = courts.Select(court =>
         {
-            var available = court.WorkingHours.Sum(w =>
+            var openHours = court.WorkingHours.Sum(w =>
                 daysPerDayOfWeek[(int)w.DayOfWeek] * (w.CloseTime - w.OpenTime).TotalHours);
+            var blockedHours = blocks
+                .Where(b => b.CourtId == court.Id)
+                .Sum(b => BlockedOpenHours(court, b.Date, b.StartTime, b.EndTime));
+            var available = Math.Max(0, openHours - blockedHours);
             var reserved = reservations
                 .Where(r => r.CourtId == court.Id)
                 .Sum(r => (r.EndTime - r.StartTime).TotalHours);
@@ -279,7 +320,9 @@ public class ReportService : IReportService
                 Count = reservations.Count(r => r.CourtId == court.Id),
                 Reserved = reserved,
                 Available = available,
-                Occupancy = available > 0 ? reserved / available : 0
+                // Working hours can be narrowed after a booking was made, which would otherwise
+                // put a court above 100 %.
+                Occupancy = available > 0 ? Math.Clamp(reserved / available, 0, 1) : 0
             };
         })
         .OrderByDescending(x => x.Occupancy).ThenByDescending(x => x.Count)
