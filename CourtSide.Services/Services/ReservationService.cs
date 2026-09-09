@@ -71,7 +71,7 @@ public class ReservationService : IReservationService
             ?? throw new NotFoundException("Rezervacija", id);
 
         if (!_currentUser.IsAdmin && dto.ClientId != _currentUser.UserId)
-            throw new BusinessException("Nemate pristup ovoj rezervaciji.");
+            throw new ForbiddenException("Nemate pristup ovoj rezervaciji.");
 
         ApplyComputedFlags(dto);
 
@@ -209,7 +209,7 @@ public class ReservationService : IReservationService
 
         var isOwner = reservation.ClientId == _currentUser.UserId;
         if (!_currentUser.IsAdmin && !isOwner)
-            throw new BusinessException("Nemate pravo otkazati ovu rezervaciju.");
+            throw new ForbiddenException("Nemate pravo otkazati ovu rezervaciju.");
 
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
 

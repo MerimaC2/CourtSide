@@ -525,7 +525,7 @@ public class PaymentService : IPaymentService
     private void EnsureOwnerOrAdmin(Reservation reservation)
     {
         if (!_currentUser.IsAdmin && reservation.ClientId != _currentUser.UserId)
-            throw new BusinessException("Nemate pristup ovoj rezervaciji.");
+            throw new ForbiddenException("Nemate pristup ovoj rezervaciji.");
     }
 
     private void EnsureStripeConfigured()

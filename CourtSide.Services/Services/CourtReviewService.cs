@@ -37,14 +37,11 @@ public class CourtReviewService : BaseCrudService<CourtReview, CourtReviewDto, C
     {
         var userId = _currentUser.UserId ?? throw new BusinessException("Niste prijavljeni.");
 
-        if (dto.Rating is < 1 or > 5)
-            throw new BusinessException("Ocjena mora biti između 1 i 5.");
-
         var reservation = await Context.Reservations.FirstOrDefaultAsync(r => r.Id == dto.ReservationId)
             ?? throw new NotFoundException("Rezervacija", dto.ReservationId);
 
         if (reservation.ClientId != userId)
-            throw new BusinessException("Nemate pristup ovoj rezervaciji.");
+            throw new ForbiddenException("Nemate pristup ovoj rezervaciji.");
 
         if (reservation.Status != ReservationStatus.Completed)
             throw new BusinessException("Recenzija je moguća samo za završenu rezervaciju.");

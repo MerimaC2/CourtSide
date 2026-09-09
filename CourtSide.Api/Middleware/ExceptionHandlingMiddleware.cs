@@ -1,4 +1,5 @@
 using CourtSide.Core.Exceptions;
+using Microsoft.EntityFrameworkCore;
 
 namespace CourtSide.Api.Middleware;
 
@@ -24,9 +25,21 @@ public class ExceptionHandlingMiddleware
         {
             await WriteAsync(context, StatusCodes.Status404NotFound, ex.Message);
         }
+        catch (ForbiddenException ex)
+        {
+            await WriteAsync(context, StatusCodes.Status403Forbidden, ex.Message);
+        }
         catch (BusinessException ex)
         {
             await WriteAsync(context, StatusCodes.Status400BadRequest, ex.Message);
+        }
+        catch (DbUpdateException ex)
+        {
+            // A constraint the services did not catch first — a missing reference, a duplicate.
+            // The request is what is wrong, so it is answered as such rather than as a server fault.
+            _logger.LogWarning(ex, "Zapis odbijen na {Method} {Path}", context.Request.Method, context.Request.Path);
+            await WriteAsync(context, StatusCodes.Status400BadRequest,
+                "Podatke nije moguće sačuvati. Provjerite unos i povezane zapise.");
         }
         catch (Exception ex)
         {
