@@ -23,6 +23,18 @@ public class CityService : BaseCrudService<City, CityDto, CityUpsertDto, CitySea
         await base.DeleteAsync(id);
     }
 
+    protected override Task BeforeInsertAsync(CityUpsertDto dto, City entity) => EnsureCountryAsync(dto.CountryId);
+
+    protected override Task BeforeUpdateAsync(CityUpsertDto dto, City entity) => EnsureCountryAsync(dto.CountryId);
+
+    /// <summary>The referenced record is checked here so the caller is told what is missing;
+    /// left to the database, the same case surfaces as an unreadable constraint violation.</summary>
+    private async Task EnsureCountryAsync(int countryId)
+    {
+        if (!await Context.Countries.AnyAsync(c => c.Id == countryId))
+            throw new NotFoundException("Država", countryId);
+    }
+
     protected override IQueryable<City> Include(IQueryable<City> query) => query.Include(x => x.Country);
 
     protected override IQueryable<City> ApplyFilter(IQueryable<City> query, CitySearchObject search)

@@ -47,20 +47,31 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
         await base.DeleteAsync(id);
     }
 
-    protected override Task BeforeInsertAsync(CourtUpsertDto dto, Court entity)
+    protected override async Task BeforeInsertAsync(CourtUpsertDto dto, Court entity)
     {
+        await EnsureReferencesAsync(dto);
         ApplyWorkingHours(dto, entity);
-        return Task.CompletedTask;
     }
 
     protected override async Task BeforeUpdateAsync(CourtUpsertDto dto, Court entity)
     {
+        await EnsureReferencesAsync(dto);
         await EnsureNoBookingsOutsideAsync(entity.Id, dto.WorkingHours);
 
         // The mapped entity was loaded without its children, so they are fetched here
         // before being replaced with what the form submitted.
         await Context.Entry(entity).Collection(x => x.WorkingHours).LoadAsync();
         ApplyWorkingHours(dto, entity);
+    }
+
+    /// <summary>The referenced records are checked here so the caller is told which one is missing;
+    /// left to the database, the same case surfaces as an unreadable constraint violation.</summary>
+    private async Task EnsureReferencesAsync(CourtUpsertDto dto)
+    {
+        if (!await Context.Sports.AnyAsync(s => s.Id == dto.SportId))
+            throw new NotFoundException("Sport", dto.SportId);
+        if (!await Context.SportCenters.AnyAsync(c => c.Id == dto.SportCenterId))
+            throw new NotFoundException("Sportski centar", dto.SportCenterId);
     }
 
     /// <summary>

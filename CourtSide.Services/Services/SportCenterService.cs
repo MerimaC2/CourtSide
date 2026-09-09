@@ -23,6 +23,17 @@ public class SportCenterService : BaseCrudService<SportCenter, SportCenterDto, S
         await base.DeleteAsync(id);
     }
 
+    protected override Task BeforeInsertAsync(SportCenterUpsertDto dto, SportCenter entity) => EnsureCityAsync(dto.CityId);
+
+    protected override Task BeforeUpdateAsync(SportCenterUpsertDto dto, SportCenter entity) => EnsureCityAsync(dto.CityId);
+
+    /// <summary>See <see cref="CityService"/>: a missing reference is reported as such.</summary>
+    private async Task EnsureCityAsync(int cityId)
+    {
+        if (!await Context.Cities.AnyAsync(c => c.Id == cityId))
+            throw new NotFoundException("Grad", cityId);
+    }
+
     protected override IQueryable<SportCenter> Include(IQueryable<SportCenter> query) => query.Include(x => x.City);
 
     protected override IQueryable<SportCenter> ApplyFilter(IQueryable<SportCenter> query, SportCenterSearchObject search)

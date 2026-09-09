@@ -1,6 +1,7 @@
 using CourtSide.Core.Dto.Base;
 using CourtSide.Core.Entities.Base;
 using CourtSide.Core.Exceptions;
+using CourtSide.Core.Helpers;
 using CourtSide.Core.SearchObjects;
 using CourtSide.Infrastructure;
 using Mapster;
@@ -55,7 +56,7 @@ public abstract class BaseCrudService<TEntity, TDto, TUpsert, TSearch> : ICrudSe
     {
         var entity = await Include(Context.Set<TEntity>().AsQueryable())
             .FirstOrDefaultAsync(e => e.Id == id)
-            ?? throw new NotFoundException(typeof(TEntity).Name, id);
+            ?? throw new NotFoundException(EntityNames.For(typeof(TEntity)), id);
 
         return Mapper.Map<TDto>(entity);
     }
@@ -78,7 +79,7 @@ public abstract class BaseCrudService<TEntity, TDto, TUpsert, TSearch> : ICrudSe
     {
         ArgumentNullException.ThrowIfNull(dto);
         var entity = await Context.Set<TEntity>().FirstOrDefaultAsync(e => e.Id == id)
-            ?? throw new NotFoundException(typeof(TEntity).Name, id);
+            ?? throw new NotFoundException(EntityNames.For(typeof(TEntity)), id);
 
         Mapper.Map(dto, entity);
         entity.UpdatedAt = DateTime.UtcNow;
@@ -93,7 +94,7 @@ public abstract class BaseCrudService<TEntity, TDto, TUpsert, TSearch> : ICrudSe
     public virtual async Task DeleteAsync(int id)
     {
         var entity = await Context.Set<TEntity>().FirstOrDefaultAsync(e => e.Id == id)
-            ?? throw new NotFoundException(typeof(TEntity).Name, id);
+            ?? throw new NotFoundException(EntityNames.For(typeof(TEntity)), id);
 
         entity.IsDeleted = true;
         entity.UpdatedAt = DateTime.UtcNow;
