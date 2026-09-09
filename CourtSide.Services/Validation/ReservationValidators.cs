@@ -1,3 +1,4 @@
+using CourtSide.Core.SearchObjects;
 using CourtSide.Core.Dto;
 using FluentValidation;
 
@@ -25,5 +26,17 @@ public class AvailabilityBlockUpsertDtoValidator : AbstractValidator<Availabilit
         RuleFor(x => x.CourtId).GreaterThan(0).WithMessage("Odaberite teren.");
         RuleFor(x => x.EndTime).GreaterThan(x => x.StartTime)
             .WithMessage("Vrijeme završetka mora biti nakon vremena početka.");
+    }
+}
+
+public class ReservationSearchObjectValidator : AbstractValidator<ReservationSearchObject>
+{
+    public ReservationSearchObjectValidator()
+    {
+        // A reversed range matches nothing, so the list came back empty as if there were no
+        // reservations at all.
+        RuleFor(x => x.DateTo).GreaterThanOrEqualTo(x => x.DateFrom!.Value)
+            .When(x => x.DateFrom.HasValue && x.DateTo.HasValue)
+            .WithMessage("Datum „od“ ne može biti poslije datuma „do“.");
     }
 }

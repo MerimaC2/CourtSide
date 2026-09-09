@@ -48,11 +48,21 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _pickDate({required bool from}) async {
     final now = DateTime.now();
+    // The two ends bound each other, so a period that runs backwards cannot be picked at all.
+    // Such a period matches nothing, and the empty report reads as "no bookings" rather than
+    // as a mistake in the filter.
+    final earliest = from ? DateTime(now.year - 2) : (_dateFrom ?? DateTime(now.year - 2));
+    final latest = from ? (_dateTo ?? DateTime(now.year + 1)) : DateTime(now.year + 1);
+    final current = (from ? _dateFrom : _dateTo) ?? now;
     final picked = await showDatePicker(
       context: context,
-      initialDate: (from ? _dateFrom : _dateTo) ?? now,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 1),
+      initialDate: current.isBefore(earliest)
+          ? earliest
+          : current.isAfter(latest)
+              ? latest
+              : current,
+      firstDate: earliest,
+      lastDate: latest,
     );
     if (picked == null) return;
     setState(() {
