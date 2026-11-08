@@ -45,7 +45,7 @@ public class ProfileService : IProfileService
 
         var result = await _userManager.UpdateAsync(user);
         if (!result.Succeeded)
-            throw new BusinessException(string.Join(" ", result.Errors.Select(e => e.Description)));
+            throw new BusinessException(IdentityErrors.Describe(result.Errors));
 
         return ToDto(user);
     }
@@ -55,21 +55,8 @@ public class ProfileService : IProfileService
         var user = await RequireUserAsync();
         var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
         if (!result.Succeeded)
-            throw new BusinessException(string.Join(" ", result.Errors.Select(Describe)));
+            throw new BusinessException(IdentityErrors.Describe(result.Errors));
     }
-
-    /// Identity reports its failures in English; the rest of the API speaks Bosnian, so the
-    /// codes a user can actually trigger are translated here.
-    private static string Describe(IdentityError error) => error.Code switch
-    {
-        "PasswordMismatch" => "Trenutna lozinka nije ispravna.",
-        "PasswordTooShort" => "Nova lozinka je prekratka.",
-        "PasswordRequiresDigit" => "Nova lozinka mora sadržavati broj.",
-        "PasswordRequiresUpper" => "Nova lozinka mora sadržavati veliko slovo.",
-        "PasswordRequiresLower" => "Nova lozinka mora sadržavati malo slovo.",
-        "PasswordRequiresNonAlphanumeric" => "Nova lozinka mora sadržavati specijalni znak.",
-        _ => error.Description
-    };
 
     public async Task<(byte[] Data, string ContentType)> UploadImageAsync(IFormFile file)
     {

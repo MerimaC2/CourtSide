@@ -25,6 +25,7 @@ public class DatabaseContext : IdentityDbContext<ApplicationUser, ApplicationRol
     public DbSet<News> News => Set<News>();
     public DbSet<CourtViewLog> CourtViewLogs => Set<CourtViewLog>();
     public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
+    public DbSet<PasswordResetCode> PasswordResetCodes => Set<PasswordResetCode>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -72,6 +73,10 @@ public class DatabaseContext : IdentityDbContext<ApplicationUser, ApplicationRol
         builder.Entity<CourtViewLog>().HasIndex(x => new { x.UserId, x.CourtId });
         // Looked up on every authenticated request, so the jti must be indexed.
         builder.Entity<RevokedToken>().HasIndex(x => x.TokenId).IsUnique();
+
+        builder.Entity<PasswordResetCode>().Property(x => x.CodeHash).HasMaxLength(500);
+        // Each attempt reads the newest code for one user.
+        builder.Entity<PasswordResetCode>().HasIndex(x => new { x.UserId, x.ExpiresAt });
 
         // ----- Global soft-delete query filter for every entity exposing an IsDeleted flag. -----
         foreach (var entityType in builder.Model.GetEntityTypes())

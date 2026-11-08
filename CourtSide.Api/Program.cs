@@ -88,9 +88,12 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
         options.Password.RequireLowercase = false;
         options.Password.RequireDigit = false;
         options.User.RequireUniqueEmail = true;
+        // Password-reset tokens are the six-digit codes users receive by email.
+        options.Tokens.PasswordResetTokenProvider = PasswordResetCodeTokenProvider.ProviderName;
     })
     .AddEntityFrameworkStores<DatabaseContext>()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    .AddTokenProvider<PasswordResetCodeTokenProvider>(PasswordResetCodeTokenProvider.ProviderName);
 
 // ----- JWT authentication -----
 builder.Services.AddAuthentication(options =>
@@ -154,7 +157,9 @@ builder.Services.AddControllers(options =>
         o.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
     });
 builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddSignalR();
+// Hub payloads carry enums by name, the same way the REST responses do.
+builder.Services.AddSignalR()
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 // ----- Application services (Mapster, validators, domain services) -----
 builder.Services.AddCourtSideServices();

@@ -27,7 +27,9 @@ public class RabbitMqPublisher : IMessagePublisher, IDisposable
         _logger = logger;
     }
 
-    public Task PublishAsync<T>(T message)
+    public Task PublishAsync<T>(T message) => TryPublishAsync(message);
+
+    public Task<bool> TryPublishAsync<T>(T message)
     {
         try
         {
@@ -45,13 +47,18 @@ public class RabbitMqPublisher : IMessagePublisher, IDisposable
                 _channel.BasicPublish(exchange: string.Empty, routingKey: _settings.Queue,
                     basicProperties: properties, body: body);
             }
+            return Task.FromResult(true);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Slanje poruke na RabbitMQ nije uspjelo (queue {Queue}).", _settings.Queue);
+            // A broken channel is dropped so the next call reconnects instead of reusing it.
+            _channel?.Dispose();
+            _connection?.Dispose();
+            _channel = null;
+            _connection = null;
+            return Task.FromResult(false);
         }
-
-        return Task.CompletedTask;
     }
 
     private void EnsureChannel()
