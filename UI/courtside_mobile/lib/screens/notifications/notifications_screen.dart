@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/app_notification.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../utils/util.dart';
+import '../../providers/api_error.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -18,11 +22,28 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<AppNotification> _items = [];
   bool _loading = true;
   String? _error;
+  StreamSubscription<AppNotification>? _live;
 
   @override
   void initState() {
     super.initState();
     _load();
+
+    // The hub already pushes each notification the moment it is created; listening here
+    // puts it at the top of an open list, so the screen shows the same thing the badge does.
+    _live = context.read<NotificationProvider>().onNotification.listen((notification) {
+      if (!mounted) return;
+      setState(() => _items = [
+            notification,
+            ..._items.where((n) => n.id != notification.id),
+          ]);
+    });
+  }
+
+  @override
+  void dispose() {
+    _live?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -33,12 +54,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final result = await context
           .read<NotificationProvider>()
-          .get(filter: {'page': 1, 'pageSize': 100});
+          .get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       setState(() => _items = result.result);
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
@@ -66,7 +87,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
       setState(() => _items = _items.map((n) => n.copyWith(isRead: true)).toList());
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -170,6 +191,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.payments_outlined;
       case 'PaymentRefunded':
         return Icons.replay_outlined;
+      case 'PaymentRefundPending':
+        return Icons.hourglass_top_outlined;
+      case 'PaymentRefundFailed':
+        return Icons.money_off_outlined;
       default:
         return Icons.notifications_outlined;
     }

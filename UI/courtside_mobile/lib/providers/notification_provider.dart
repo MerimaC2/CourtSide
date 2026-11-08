@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:signalr_netcore/signalr_client.dart';
 
 import '../config/app_config.dart';
@@ -89,7 +90,15 @@ class NotificationProvider extends BaseProvider<AppNotification> {
 
     hub.on('ReceiveNotification', (arguments) {
       if (arguments == null || arguments.isEmpty) return;
-      final notification = AppNotification.fromJson(arguments[0] as Map<String, dynamic>);
+      // An exception thrown here would escape into the hub client's message loop, so a
+      // payload that cannot be read is logged and skipped; the next one is handled normally.
+      final AppNotification notification;
+      try {
+        notification = AppNotification.fromJson(arguments[0] as Map<String, dynamic>);
+      } catch (e) {
+        debugPrint('Notifikacija sa huba nije pročitana: $e (${arguments[0]})');
+        return;
+      }
       unreadCount++;
       notifyListeners();
       _controller.add(notification);
