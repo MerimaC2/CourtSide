@@ -38,63 +38,107 @@ UI/courtside_mobile       Flutter mobilna (korisnik)
 
 ### Desktop (administratorska aplikacija)
 - Prijava uz provjeru administratorske uloge
-- **Tereni** — CRUD, upload slike terena, pretraga, pregled recenzija sa prosječnom ocjenom
-- **Raspored** — pregled termina po terenu i danu, blokiranje/odblokiravanje termina
-- **Rezervacije** — pretraga i filteri (status, period), detalji, potvrda i otkazivanje,
-  evidencija gotovinskog plaćanja i refund; lista se sama osvježava dok je otvorena
-- **Izvještaji** — PDF izvještaj o rezervacijama (sažetak po statusu, prihod, pregled)
+- **Tereni** — CRUD, upload slike terena (provjerava se stvarni sadržaj fajla, ne samo ekstenzija),
+  radno vrijeme po danima (novi teren kreće zatvoren, standardni raspored 08:00–22:00 na jedan
+  klik), pretraga, pregled recenzija sa prosječnom ocjenom
+- **Raspored** — pregled termina po terenu i danu, blokiranje i odblokiranje termina
+- **Rezervacije** — pretraga (i po klijentu) i filteri (status, period), detalji, potvrda i
+  otkazivanje, evidencija gotovinskog plaćanja; povrat novca preko Stripe-a ili ručno za gotovinu,
+  uz status povrata i ponovni pokušaj kad povrat ne uspije; lista se sama osvježava dok je otvorena
+- **Izvještaji** — dva PDF izvještaja za odabrani period i sportski centar: rezervacije (sažetak po
+  statusu, ostvareni prihod, pregled rezervacija) i popunjenost terena (najtraženiji termini i
+  popunjenost u odnosu na radno vrijeme)
 - **Obavijesti** — CRUD obavijesti sa slikom i datumom objave
 - **Referentni podaci** — CRUD za sportove, sportske centre, gradove i države;
   koordinate centra se biraju pinovanjem na karti (polja su samo za čitanje)
-- Prekidač jezika BS/EN
+- Liste sa straničenjem; prekidač jezika BS/EN
 
 ### Mobilna (korisnička aplikacija)
-- Registracija i prijava
+- Registracija i prijava; **zaboravljena lozinka** — šestocifreni kod stiže mailom i vrijedi 15 minuta
 - **Tereni** — lista sa slikom i prosječnom ocjenom, pretraga i filteri (sport, grad),
   sekcija „Preporučeno za tebe“
-- **Detalji terena** — podaci, prosječna ocjena i lista recenzija (master-detail)
+- **Detalji terena** — podaci, adresa i grad, radno vrijeme po danima, prosječna ocjena i lista
+  recenzija (master-detail)
 - **Dostupnost** — odabir datuma i slobodnog termina
 - **Rezervacija i plaćanje** — gotovina ili kartica (Stripe PaymentSheet, in-app)
-- **Moje rezervacije** — aktivne i historija, otkazivanje uz pravilo od 24 sata,
-  ocjenjivanje terena nakon završene rezervacije
+- **Moje rezervacije** — aktivne i historija, status plaćanja, „Plati karticom“ za neplaćenu
+  rezervaciju, otkazivanje uz pravilo od 24 sata (prikazan je tačan rok), ocjenjivanje terena
+  nakon završene rezervacije
 - **Profil** — pregled i izmjena podataka, profilna slika, promjena lozinke
 - **Obavijesti** i **Notifikacije** (real-time preko SignalR-a, uz označavanje pročitanog)
 - Prekidač jezika BS/EN
 
 ### Poslovna logika
 - Statusi rezervacije `Pending → Confirmed → Completed / Cancelled` kroz centralizovanu
-  state machine; rezervacije kojima je termin istekao se automatski zatvaraju u pozadinskom poslu
+  state machine
+- Pozadinski posao (pri pokretanju API-ja, pa svakih `RESERVATION_SWEEP_MINUTES` minuta) otkazuje
+  rezervacije na čekanju kojima je termin počeo, završava prošle i kod Stripe-a provjerava
+  kartična plaćanja i povrate koji još čekaju
 - Provjera preklapanja termina, radnog vremena i blokada na serveru
 - Audit trag (ko je i kada potvrdio/otkazao, razlog otkazivanja)
-- Plaćanje se finalizira serverski (Stripe webhook), refund preko Stripe API-ja
-- Notifikacije za kreiranje, potvrdu, otkazivanje i završetak rezervacije te plaćanje i povrat
+- Plaćanje se finalizira serverski (Stripe webhook ili serverska provjera kod Stripe-a); klijent
+  nikad sam ne evidentira uspješno plaćanje. Povrat ide preko Stripe API-ja.
+- Notifikacije za kreiranje, potvrdu, otkazivanje i završetak rezervacije te plaćanje i povrat;
+  mail za kod za novu lozinku te kreiranje, potvrdu i otkazivanje rezervacije
 
 ## Pokretanje
 
 ### Preduslovi
-- .NET 9 SDK, Docker Desktop, Flutter SDK, Android SDK + AVD, JDK 17
+- Docker Desktop, Android emulator (AVD) za mobilnu aplikaciju, Windows za desktop aplikaciju
+- Za pokretanje iz izvornog koda još: Flutter SDK (3.44, Dart 3.12), Android SDK, JDK 17 i
+  Visual Studio sa „Desktop development with C++“ (za Windows build); .NET 9 SDK samo ako se API
+  pokreće bez Dockera
 - **Konfiguracija:** raspakovati `.env-tajne.zip` u root repozitorija (nastaje `.env` fajl;
   šifra arhive je dostavljena uz predaju rada). Alternativno: kopirati `.env.example` → `.env`
   i popuniti vlastite vrijednosti.
 
 ### Backend (Docker)
 ```bash
-docker compose up -d            # SQL Server + RabbitMQ + API + Worker
-# Swagger: http://localhost:5000/swagger
+docker compose up -d --build    # SQL Server + RabbitMQ + API + Worker
 ```
+- Swagger: http://localhost:5000/swagger
+- RabbitMQ Management: http://localhost:15672 (korisnik i lozinka su `RABBITMQ_USER` /
+  `RABBITMQ_PASSWORD` iz `.env`)
+
 Migracije i seed podaci se primjenjuju automatski pri pokretanju API-ja.
 
-### Mobilna aplikacija (Android, AVD)
+### Aplikacije iz GitHub Release-a
+Arhiva `fit-build-<datum>.zip` iz Release-a sadrži gotove buildove:
+- **Mobilna:** obrisati staru verziju aplikacije u AVD, pa prevući `app-release.apk` u emulator.
+  Adresa API-ja je `http://10.0.2.2:5000` (host računar gledano iz emulatora).
+- **Desktop:** pokrenuti `Release\courtside_admin.exe`. Adresa API-ja je `http://localhost:5000`.
+
+### Aplikacije iz izvornog koda
+Mobilna (Android, AVD):
 ```bash
 cd UI/courtside_mobile
 flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5000
 ```
-
-### Desktop aplikacija (Windows)
+Desktop (Windows):
 ```bash
 cd UI/courtside_admin
 flutter run -d windows --dart-define=API_BASE_URL=http://localhost:5000
 ```
+
+### Mailovi (Mailtrap)
+Worker šalje mailove preko SMTP podataka iz `.env` (`SMTP_*`, Mailtrap sandbox). Mail ne ide
+stvarnom primaocu nego završava u Mailtrap inboxu — tu se čita i kod za novu lozinku. Inbox se
+čita u Mailtrapu ili bilo kojim POP3 klijentom: server `pop3.mailtrap.io`, port `1100` (STARTTLS),
+korisničko ime i lozinka su `SMTP_USERNAME` i `SMTP_PASSWORD` iz `.env`. Za vlastiti inbox dovoljno
+je u `.env` upisati svoje `SMTP_*` vrijednosti i ponovo pokrenuti `docker compose up -d`.
+
+### Stripe
+- Test kartica: `4242 4242 4242 4242`, bilo koji budući datum i bilo koji CVC.
+- Plaćanje radi i bez webhooka: nakon PaymentSheet-a aplikacija traži od API-ja da plaćanje
+  provjeri kod Stripe-a, a pozadinski posao provjerava plaćanja i povrate koji još čekaju.
+- Webhook (opciono, za trenutne potvrde plaćanja i povrata), uz instaliran Stripe CLI:
+  ```bash
+  stripe listen --forward-to localhost:5000/api/payments/webhook --events payment_intent.succeeded,payment_intent.payment_failed,refund.updated,refund.failed
+  ```
+  `whsec_…` koji `stripe listen` ispiše upisati u `STRIPE_WEBHOOK_SECRET` u `.env`, pa
+  `docker compose up -d api`. Povrat koji Stripe ne završi odmah dobije konačan status preko
+  događaja `refund.updated` / `refund.failed`, a bez njih kad ga pozadinski posao provjeri
+  (najkasnije za `RESERVATION_SWEEP_MINUTES` minuta).
 
 ## Korisnički nalozi za pristup (seed)
 
@@ -108,8 +152,16 @@ Uz njih se seeduju i klijenti `amina`, `tarik` i `lejla` (lozinka `test`) kako b
 rezervacija pokrivala više korisnika — to je potrebno sistemu preporuke da pronađe sličnosti
 među korisnicima.
 
+Seed nalozi namjerno imaju lozinku `test` od 4 znaka, kako upute traže. Svaka nova lozinka
+(registracija, promjena i reset lozinke) mora imati najmanje 6 znakova, pa se seed nalogu kroz
+reset ne može vratiti lozinka `test` — reset lozinke je zato najbolje probati na novom nalogu.
+
 ## Sistem preporuke
 
 Collaborative filtering (ML.NET Matrix Factorization) nad historijom rezervacija i pregleda
-terena, sa objašnjenjem zašto je teren preporučen i fallbackom na popularne terene kada korisnik
-nema dovoljno historije. Detaljan opis: [`recommender-dokumentacija.md`](recommender-dokumentacija.md).
+terena (rezervacija nosi 5 jedinica signala, pregled detalja 1, a pregledi jednog korisnika
+najviše 3 po terenu), sa objašnjenjem
+zašto je teren preporučen. Kada model ne poznaje korisnika ili ne popuni listu, nude se popularni
+tereni iz zadnjih 30 dana, poredani po sportu i gradu koje korisnik inače bira. Model se trenira
+pri pokretanju API-ja i zatim svakih 6 sati. Detaljan opis:
+[`recommender-dokumentacija.md`](recommender-dokumentacija.md).
