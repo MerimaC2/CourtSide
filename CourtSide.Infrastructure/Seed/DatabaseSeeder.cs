@@ -3,6 +3,7 @@ using CourtSide.Core.Entities.Identity;
 using CourtSide.Core.Enumerations;
 using CourtSide.Core.Helpers;
 using CourtSide.Shared.Constants;
+using CourtSide.Shared.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,20 +18,23 @@ public static class DatabaseSeeder
         var db = services.GetRequiredService<DatabaseContext>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
+        var clock = services.GetRequiredService<IAppClock>();
 
         await SeedRolesAsync(roleManager);
         await SeedUsersAsync(userManager);
         await SeedDomainAsync(db);
         await SeedNewsAsync(db);
-        await SeedActivityAsync(db, userManager);
+        await SeedActivityAsync(db, userManager, clock);
     }
 
     private static async Task SeedRolesAsync(RoleManager<ApplicationRole> roleManager)
     {
         foreach (var role in new[] { Roles.Admin, Roles.User })
         {
-            if (!await roleManager.RoleExistsAsync(role))
-                await roleManager.CreateAsync(new ApplicationRole { Name = role, Description = $"{role} role" });
+            if (await roleManager.RoleExistsAsync(role)) continue;
+
+            var result = await roleManager.CreateAsync(new ApplicationRole { Name = role, Description = $"{role} role" });
+            EnsureSucceeded(result, $"Seed role '{role}'");
         }
     }
 
@@ -67,16 +71,22 @@ public static class DatabaseSeeder
         // the rule. The hash is produced the same way Identity would, so sign-in is unaffected.
         user.PasswordHash = userManager.PasswordHasher.HashPassword(user, password);
 
-        var result = await userManager.CreateAsync(user);
-        if (!result.Succeeded)
-        {
-            // Silently skipping would leave a fresh database with no way in, and the cause would
-            // only show up as a failed login much later.
-            throw new InvalidOperationException(
-                $"Seed naloga '{username}' nije uspio: {string.Join("; ", result.Errors.Select(e => e.Description))}");
-        }
+        EnsureSucceeded(await userManager.CreateAsync(user), $"Seed naloga '{username}'");
 
-        await userManager.AddToRoleAsync(user, role);
+        // The role assignment is checked like the account itself: an administrator without the
+        // role could sign in but would be refused by every screen.
+        EnsureSucceeded(await userManager.AddToRoleAsync(user, role), $"Dodjela role '{role}' nalogu '{username}'");
+    }
+
+    /// <summary>
+    /// Seeding runs at startup on an empty database. Skipping a failure quietly would leave the
+    /// application with no way in and no explanation, so a failed step stops startup instead.
+    /// </summary>
+    private static void EnsureSucceeded(IdentityResult result, string what)
+    {
+        if (result.Succeeded) return;
+        throw new InvalidOperationException(
+            $"{what} nije uspjelo: {string.Join("; ", result.Errors.Select(e => e.Description))}");
     }
 
     private static async Task SeedDomainAsync(DatabaseContext db)
@@ -119,7 +129,8 @@ public static class DatabaseSeeder
     /// status, their payments, reviews on the finished ones and the matching notifications.
     /// The recommender also needs real history before it can suggest anything.
     /// </summary>
-    private static async Task SeedActivityAsync(DatabaseContext db, UserManager<ApplicationUser> userManager)
+    private static async Task SeedActivityAsync(DatabaseContext db, UserManager<ApplicationUser> userManager,
+        IAppClock clock)
     {
         if (await db.Reservations.AnyAsync()) return;
 
@@ -134,8 +145,8 @@ public static class DatabaseSeeder
         }
         if (clients.Count < 4) return;
 
-        var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var now = clock.UtcNow;
+        var today = clock.Today; // the venue's date, like every slot in the system
         var usedNumbers = new HashSet<string>();
 
         string NextNumber()
@@ -149,7 +160,8 @@ public static class DatabaseSeeder
             ReservationStatus status, PaymentMethod method, PaymentStatus paymentStatus)
         {
             var date = today.AddDays(dayOffset);
-            var createdAt = now.AddDays(dayOffset - 2);
+            // Upcoming bookings were made a couple of days ago; past ones two days before their slot.
+            var createdAt = dayOffset > 0 ? now.AddDays(-2).AddHours(-dayOffset) : now.AddDays(dayOffset - 2);
             var price = court.PricePerHour;
 
             var reservation = new Reservation
@@ -180,7 +192,7 @@ public static class DatabaseSeeder
                 reservation.ConfirmedAt = createdAt.AddHours(1);
 
             if (status == ReservationStatus.Completed)
-                reservation.CompletedAt = date.ToDateTime(new TimeOnly(hour + 1, 0));
+                reservation.CompletedAt = clock.ToInstant(date, new TimeOnly(hour + 1, 0)).UtcDateTime; // audit stamp stays UTC
 
             if (status == ReservationStatus.Cancelled)
             {
