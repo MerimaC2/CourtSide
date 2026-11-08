@@ -19,6 +19,8 @@ public class CourtDto
 
     public int SportCenterId { get; set; }
     public string? SportCenterName { get; set; }
+    public string? SportCenterAddress { get; set; }
+    public string? CityName { get; set; }
 
     public decimal PricePerHour { get; set; }
     public bool IsActive { get; set; }
@@ -41,5 +43,7 @@ public class CourtUpsertDto
     public decimal PricePerHour { get; set; }
     public bool IsActive { get; set; } = true;
 
-    public List<CourtWorkingHoursDto> WorkingHours { get; set; } = [];
+    /// <summary>Required: an omitted list is rejected, while an empty one means the court is closed
+    /// and has no bookable slots.</summary>
+    public List<CourtWorkingHoursDto>? WorkingHours { get; set; }
 }

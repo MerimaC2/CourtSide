@@ -13,6 +13,7 @@ public class MappingRegister : IRegister
         config.NewConfig<Reservation, ReservationDto>()
             .Map(d => d.ClientName, s => s.Client.FirstName + " " + s.Client.LastName)
             .Map(d => d.CourtName, s => s.Court.Name)
+            .Map(d => d.CourtIsActive, s => s.Court.IsActive)
             .Map(d => d.SportCenterName, s => s.Court.SportCenter.Name)
             .Map(d => d.PaymentMethod, s => s.Payment != null ? (PaymentMethod?)s.Payment.Method : null)
             .Map(d => d.PaymentStatus, s => s.Payment != null ? (PaymentStatus?)s.Payment.Status : null)
@@ -23,6 +24,8 @@ public class MappingRegister : IRegister
             .Map(d => d.CourtName, s => s.Court.Name);
 
         config.NewConfig<Court, CourtDto>()
+            .Map(d => d.SportCenterAddress, s => s.SportCenter.Address)
+            .Map(d => d.CityName, s => s.SportCenter.City.Name)
             .Map(d => d.PrimaryImageId,
                 s => s.Images.Where(i => i.IsPrimary).Select(i => (int?)i.Id).FirstOrDefault())
             .Map(d => d.AverageRating,

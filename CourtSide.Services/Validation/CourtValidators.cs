@@ -36,7 +36,9 @@ public class CourtUpsertDtoValidator : AbstractValidator<CourtUpsertDto>
         // Availability reads one row per weekday while the occupancy report sums them all, so a
         // duplicated day would make the same court produce two different answers.
         RuleFor(x => x.WorkingHours)
-            .Must(hours => hours.Select(h => h.DayOfWeek).Distinct().Count() == hours.Count)
+            .Cascade(CascadeMode.Stop) // a missing list is reported once, not also tripped over below
+            .NotNull().WithMessage("Radno vrijeme mora biti navedeno (prazna lista znači da je teren zatvoren).")
+            .Must(hours => hours!.Select(h => h.DayOfWeek).Distinct().Count() == hours!.Count)
             .WithMessage("Radno vrijeme može imati samo jedan unos po danu u sedmici.");
     }
 }

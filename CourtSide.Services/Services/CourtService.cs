@@ -36,8 +36,8 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
     }
 
     protected override IQueryable<Court> Include(IQueryable<Court> query) =>
-        query.Include(x => x.Sport).Include(x => x.SportCenter).Include(x => x.Images)
-             .Include(x => x.Reviews).Include(x => x.WorkingHours);
+        query.Include(x => x.Sport).Include(x => x.SportCenter).ThenInclude(s => s.City)
+             .Include(x => x.Images).Include(x => x.Reviews).Include(x => x.WorkingHours);
 
     /// <summary>A court with reservation history stays (deactivate it instead), so past bookings keep their data.</summary>
     public override async Task DeleteAsync(int id)
@@ -56,7 +56,7 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
     protected override async Task BeforeUpdateAsync(CourtUpsertDto dto, Court entity)
     {
         await EnsureReferencesAsync(dto);
-        await EnsureNoBookingsOutsideAsync(entity.Id, dto.WorkingHours);
+        await EnsureNoBookingsOutsideAsync(entity.Id, dto.WorkingHours!);
 
         // The mapped entity was loaded without its children, so they are fetched here
         // before being replaced with what the form submitted.
@@ -109,9 +109,9 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
 
     /// <summary>
     /// Replaces the court's opening hours with exactly the submitted set. An empty set means the
-    /// court is closed and has no bookable slots, matching what <c>CourtUpsertDto</c> documents;
-    /// substituting a default schedule here would silently rewrite the caller's intent, which is
-    /// particularly dangerous on edit.
+    /// court is closed and has no bookable slots, as <see cref="CourtUpsertDto.WorkingHours"/>
+    /// documents; substituting a default schedule here would silently rewrite the caller's intent,
+    /// which is particularly dangerous on edit. The validator has already rejected a missing set.
     /// </summary>
     private void ApplyWorkingHours(CourtUpsertDto dto, Court entity)
     {
@@ -120,7 +120,7 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
         entity.WorkingHours.Clear();
 
         var now = DateTime.UtcNow;
-        foreach (var day in dto.WorkingHours)
+        foreach (var day in dto.WorkingHours!)
         {
             if (day.CloseTime <= day.OpenTime)
                 throw new BusinessException("Vrijeme zatvaranja mora biti nakon vremena otvaranja.");

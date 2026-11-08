@@ -18,6 +18,15 @@ public static class ReservationStateMachine
         [ReservationStatus.Cancelled] = new()
     };
 
+    /// <summary>Status names as the apps show them, so the refusal reads naturally to the user.</summary>
+    private static readonly Dictionary<ReservationStatus, string> Labels = new()
+    {
+        [ReservationStatus.Pending] = "Na čekanju",
+        [ReservationStatus.Confirmed] = "Potvrđena",
+        [ReservationStatus.Cancelled] = "Otkazana",
+        [ReservationStatus.Completed] = "Završena"
+    };
+
     public static bool CanTransition(ReservationStatus from, ReservationStatus to) =>
         Allowed.TryGetValue(from, out var targets) && targets.Contains(to);
 
@@ -25,6 +34,9 @@ public static class ReservationStateMachine
     {
         if (!CanTransition(from, to))
             throw new BusinessException(
-                $"Nije moguća promjena statusa rezervacije sa '{from}' na '{to}'.");
+                $"Nije moguća promjena statusa rezervacije sa '{Label(from)}' na '{Label(to)}'.");
     }
+
+    private static string Label(ReservationStatus status) =>
+        Labels.TryGetValue(status, out var label) ? label : status.ToString();
 }

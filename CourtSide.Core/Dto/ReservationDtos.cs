@@ -14,6 +14,9 @@ public class ReservationDto
     public string? CourtName { get; set; }
     public string? SportCenterName { get; set; }
 
+    /// <summary>A booking on a deactivated court can no longer be confirmed.</summary>
+    public bool CourtIsActive { get; set; }
+
     public DateOnly Date { get; set; }
     public TimeOnly StartTime { get; set; }
     public TimeOnly EndTime { get; set; }
@@ -48,8 +51,13 @@ public class ReservationDto
     /// <summary>Last moment a client can cancel; null once cancelling is no longer possible.</summary>
     public DateTimeOffset? CancelDeadlineAt { get; set; }
 
-    /// <summary>Whether an administrator may still confirm — false once the slot has started.</summary>
+    /// <summary>Whether an administrator may still confirm — false once the slot has started
+    /// or the court has been deactivated.</summary>
     public bool CanConfirm { get; set; }
+
+    /// <summary>Whether the client may start (or restart) a card payment for this booking — set to
+    /// card payment, with nothing collected yet and the booking still payable.</summary>
+    public bool CanPayOnline { get; set; }
 }
 
 public class ReservationCreateDto

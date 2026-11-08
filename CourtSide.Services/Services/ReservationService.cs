@@ -10,10 +10,12 @@ using CourtSide.Infrastructure;
 using CourtSide.Services.Payments;
 using CourtSide.Shared.Messages;
 using CourtSide.Shared.Messaging;
+using CourtSide.Shared.Models;
 using CourtSide.Shared.Services;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace CourtSide.Services.Services;
 
@@ -39,11 +41,13 @@ public class ReservationService : IReservationService
     private readonly IMessagePublisher _publisher;
     private readonly IPaymentService _payments;
     private readonly IAppClock _clock;
+    private readonly StripeSettings _stripe;
     private readonly ILogger<ReservationService> _logger;
 
     public ReservationService(DatabaseContext db, ICurrentUser currentUser,
         INotificationService notifications, IMessagePublisher publisher,
-        IPaymentService payments, IAppClock clock, ILogger<ReservationService> logger)
+        IPaymentService payments, IAppClock clock, IOptions<StripeSettings> stripe,
+        ILogger<ReservationService> logger)
     {
         _db = db;
         _currentUser = currentUser;
@@ -51,6 +55,7 @@ public class ReservationService : IReservationService
         _publisher = publisher;
         _payments = payments;
         _clock = clock;
+        _stripe = stripe.Value;
         _logger = logger;
     }
 
@@ -201,15 +206,15 @@ public class ReservationService : IReservationService
 
     public async Task<ReservationDto> CancelAsync(int id, ReservationCancelDto dto)
     {
-        if (string.IsNullOrWhiteSpace(dto.Reason))
-            throw new BusinessException("Razlog otkazivanja je obavezan.");
-
         var reservation = await _db.Reservations.FirstOrDefaultAsync(r => r.Id == id)
             ?? throw new NotFoundException("Rezervacija", id);
 
         var isOwner = reservation.ClientId == _currentUser.UserId;
         if (!_currentUser.IsAdmin && !isOwner)
             throw new ForbiddenException("Nemate pravo otkazati ovu rezervaciju.");
+
+        if (string.IsNullOrWhiteSpace(dto.Reason))
+            throw new BusinessException("Razlog otkazivanja je obavezan.");
 
         ReservationStateMachine.EnsureCanTransition(reservation.Status, ReservationStatus.Cancelled);
 
@@ -255,9 +260,12 @@ public class ReservationService : IReservationService
     }
 
     /// <summary>
-    /// Moves confirmed reservations whose slot has already elapsed to <see cref="ReservationStatus.Completed"/>
-    /// and notifies the client. Driven by <c>ReservationCompletionService</c> rather than a user action,
-    /// since completion happens with the passage of time. Returns how many were completed.
+    /// Moves confirmed reservations whose slot has already elapsed to <see cref="ReservationStatus.Completed"/>,
+    /// and cancels pending reservations whose start has passed without confirmation, giving
+    /// <see cref="ReservationPolicy.SystemExpiryReason"/> as the reason and refunding anything already
+    /// collected. The client is notified in both cases. Driven by <c>ReservationLifecycleService</c>
+    /// rather than a user action, since both happen with the passage of time. Returns how many were
+    /// completed and how many were cancelled as expired.
     /// </summary>
     public async Task<ReservationSweepResult> ProcessPastDueAsync(CancellationToken cancellationToken = default)
     {
@@ -353,8 +361,12 @@ public class ReservationService : IReservationService
             query = query.Where(r => r.Date >= search.DateFrom);
         if (search.DateTo.HasValue)
             query = query.Where(r => r.Date <= search.DateTo);
+        // The full name also matches the first or the last name on its own.
         if (!string.IsNullOrWhiteSpace(search.SearchTerm))
-            query = query.Where(r => r.ReservationNumber.Contains(search.SearchTerm));
+            query = query.Where(r => r.ReservationNumber.Contains(search.SearchTerm) ||
+                                     (r.Client.FirstName + " " + r.Client.LastName).Contains(search.SearchTerm) ||
+                                     r.Client.UserName!.Contains(search.SearchTerm) ||
+                                     r.ContactName.Contains(search.SearchTerm));
 
         var total = await query.CountAsync();
         var page = search.Page < 1 ? 1 : search.Page;
@@ -383,12 +395,25 @@ public class ReservationService : IReservationService
         dto.EndsAt = _clock.ToInstant(dto.Date, dto.EndTime);
 
         var cancellable = dto.Status is ReservationStatus.Pending or ReservationStatus.Confirmed;
-        var deadline = dto.StartsAt - ReservationPolicy.CancellationWindow;
+        // Expressed in the venue's zone, so its wall-clock part is right even across a clock change.
+        var deadline = TimeZoneInfo.ConvertTime(dto.StartsAt - ReservationPolicy.CancellationWindow, _clock.TimeZone);
 
         dto.CancelDeadlineAt = cancellable ? deadline : null;
         dto.CanCancel = cancellable &&
             (_currentUser.IsAdmin || _clock.TimeUntil(dto.Date, dto.StartTime) >= ReservationPolicy.CancellationWindow);
-        dto.CanConfirm = dto.Status == ReservationStatus.Pending && !_clock.HasPassed(dto.Date, dto.StartTime);
+        // Mirrors every check ConfirmAsync makes, so the button is never offered for a
+        // confirmation the server would refuse.
+        dto.CanConfirm = dto.Status == ReservationStatus.Pending &&
+                         dto.CourtIsActive &&
+                         !_clock.HasPassed(dto.Date, dto.StartTime);
+        // The same payment rule the intent endpoint enforces, including that online payments are set up.
+        // That rule reads only the two statuses, so the completion time and processor reference the
+        // projection does not carry are not needed.
+        dto.CanPayOnline = _stripe.IsConfigured &&
+                           dto.PaymentMethod == PaymentMethod.Stripe &&
+                           dto.PaymentStatus is { } paymentStatus &&
+                           PaymentPolicy.IsAllowed(dto.Status, paymentStatus, PaymentMethod.Stripe,
+                               PaymentAction.StartOnlinePayment, new PaymentPolicy.Context(null, _clock.UtcNow, null));
     }
 
     private async Task SendEmailAsync(int userId, string subject, string body)
