@@ -12,8 +12,6 @@ public sealed class ReportLabels
     public required string Subtitle { get; init; }
     public required string Period { get; init; }
     public required string GeneratedAt { get; init; }
-    public required string PeriodStart { get; init; }
-    public required string PeriodEnd { get; init; }
 
     public required string Summary { get; init; }
     public required string TotalReservations { get; init; }
@@ -58,8 +56,6 @@ public sealed class ReportLabels
         Subtitle = "Izvještaj o rezervacijama i prihodu",
         Period = "Period",
         GeneratedAt = "Generisano",
-        PeriodStart = "početak",
-        PeriodEnd = "danas",
         Summary = "Sažetak",
         TotalReservations = "Ukupno rezervacija",
         CollectedRevenue = "Naplaćeni prihod",
@@ -103,8 +99,6 @@ public sealed class ReportLabels
         Subtitle = "Reservations and revenue report",
         Period = "Period",
         GeneratedAt = "Generated",
-        PeriodStart = "start",
-        PeriodEnd = "today",
         Summary = "Summary",
         TotalReservations = "Total reservations",
         CollectedRevenue = "Collected revenue",

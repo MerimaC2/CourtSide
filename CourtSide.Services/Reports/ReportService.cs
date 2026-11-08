@@ -47,18 +47,18 @@ public class ReportService : IReportService
     }
 
     /// <summary>
-    /// How much of a block falls inside the court's opening hours for that date. Only that part
-    /// was ever bookable, so only that part is taken off the available total; a block on a day
-    /// the court is closed takes nothing away.
+    /// How many of the court's slots on that date the blocks take away. Availability shows every
+    /// slot a block overlaps as blocked, so exactly those slots are taken off the available total,
+    /// each counted once even where blocks overlap; on a day the court is closed there are no
+    /// slots and nothing is taken away.
     /// </summary>
-    private static double BlockedOpenHours(Court court, DateOnly date, TimeOnly start, TimeOnly end)
+    private static int BlockedSlots(Court court, DateOnly date, IEnumerable<(TimeOnly Start, TimeOnly End)> blocks)
     {
         var day = court.WorkingHours.FirstOrDefault(w => w.DayOfWeek == date.DayOfWeek);
         if (day is null) return 0;
 
-        var overlapStart = start > day.OpenTime ? start : day.OpenTime;
-        var overlapEnd = end < day.CloseTime ? end : day.CloseTime;
-        return overlapEnd > overlapStart ? (overlapEnd - overlapStart).TotalHours : 0;
+        return SlotGrid.Build(day.OpenTime, day.CloseTime)
+            .Count(slot => blocks.Any(b => SlotGrid.Overlaps(b.Start, b.End, slot.Start, slot.End)));
     }
 
     public async Task<byte[]> ReservationsPdfAsync(DateOnly? dateFrom, DateOnly? dateTo, int? sportCenterId,
@@ -107,8 +107,11 @@ public class ReportService : IReportService
             .OrderByDescending(x => x.Revenue).ThenByDescending(x => x.Count)
             .ToList();
 
-        var periodText = $"{(dateFrom.HasValue ? dateFrom.Value.ToString("dd.MM.yyyy") : labels.PeriodStart)}" +
-                         $" – {(dateTo.HasValue ? dateTo.Value.ToString("dd.MM.yyyy") : labels.PeriodEnd)}";
+        // An open bound is shown as the first or last date the listed reservations fall on
+        // (they are ordered by date), so the header states the range the report really covers.
+        var periodFrom = dateFrom ?? reservations.FirstOrDefault()?.Date;
+        var periodTo = dateTo ?? reservations.LastOrDefault()?.Date;
+        var periodText = $"{periodFrom?.ToString("dd.MM.yyyy") ?? "—"} – {periodTo?.ToString("dd.MM.yyyy") ?? "—"}";
         var generatedAt = _clock.LocalNow.ToString("dd.MM.yyyy HH:mm");
 
         var document = Document.Create(container =>
@@ -264,8 +267,15 @@ public class ReportService : IReportService
 
         // Occupancy needs a bounded period so available hours can be computed;
         // when none is given the report covers the last 30 days.
-        var to = dateTo ?? _clock.Today;
+        // A start alone runs until today, or 30 days ahead when the start itself is in the
+        // future, so a future start on its own still gives a valid period. An end alone covers
+        // the 30 days before it.
+        var today = _clock.Today;
+        var to = dateTo ?? (dateFrom.HasValue && dateFrom.Value > today ? dateFrom.Value.AddDays(29) : today);
         var from = dateFrom ?? to.AddDays(-29);
+        // The resolved period is validated, so a start after the end is refused rather than
+        // producing a report where every court reads as empty.
+        EnsureValidPeriod(from, to);
 
         var courtsQuery = _db.Courts
             .Include(c => c.SportCenter)
@@ -302,14 +312,18 @@ public class ReportService : IReportService
         for (var day = from; day <= to; day = day.AddDays(1))
             daysPerDayOfWeek[(int)day.DayOfWeek]++;
 
+        var slotHours = SlotGrid.SlotDuration.TotalHours;
         var occupancyRows = courts.Select(court =>
         {
-            var openHours = court.WorkingHours.Sum(w =>
-                daysPerDayOfWeek[(int)w.DayOfWeek] * (w.CloseTime - w.OpenTime).TotalHours);
-            var blockedHours = blocks
+            // Capacity is what availability actually offers: whole slots from the same grid, so
+            // time before closing that is too short for a slot is not counted as bookable.
+            var offeredHours = slotHours * court.WorkingHours.Sum(w =>
+                daysPerDayOfWeek[(int)w.DayOfWeek] * SlotGrid.Build(w.OpenTime, w.CloseTime).Count());
+            var blockedHours = slotHours * blocks
                 .Where(b => b.CourtId == court.Id)
-                .Sum(b => BlockedOpenHours(court, b.Date, b.StartTime, b.EndTime));
-            var available = Math.Max(0, openHours - blockedHours);
+                .GroupBy(b => b.Date)
+                .Sum(g => BlockedSlots(court, g.Key, g.Select(b => (b.StartTime, b.EndTime))));
+            var available = Math.Max(0, offeredHours - blockedHours);
             var reserved = reservations
                 .Where(r => r.CourtId == court.Id)
                 .Sum(r => (r.EndTime - r.StartTime).TotalHours);
