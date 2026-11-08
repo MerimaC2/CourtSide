@@ -22,6 +22,7 @@ import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../reservations/my_reservations_screen.dart';
 import 'court_details_screen.dart';
+import '../../providers/api_error.dart';
 
 class CourtsListScreen extends StatefulWidget {
   const CourtsListScreen({super.key});
@@ -74,8 +75,8 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
     final recommendationProvider = context.read<RecommendationProvider>();
     try {
       // Independent of each other — issue both requests before awaiting either.
-      final sportsRequest = sportProvider.get(filter: {'Page': 1, 'PageSize': 100});
-      final citiesRequest = cityProvider.get(filter: {'Page': 1, 'PageSize': 100});
+      final sportsRequest = sportProvider.get(filter: {'Page': 1, 'PageSize': BaseProvider.maxPageSize});
+      final citiesRequest = cityProvider.get(filter: {'Page': 1, 'PageSize': BaseProvider.maxPageSize});
       final sports = await sportsRequest;
       final cities = await citiesRequest;
       if (!mounted) return;
@@ -108,7 +109,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
     try {
       final filter = <String, dynamic>{
         'Page': 1,
-        'PageSize': 100,
+        'PageSize': BaseProvider.maxPageSize,
         'IsActive': true,
         if (_searchController.text.trim().isNotEmpty)
           'SearchTerm': _searchController.text.trim(),
@@ -120,7 +121,7 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
       setState(() => _courts = result.result);
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
@@ -130,10 +131,14 @@ class _CourtsListScreenState extends State<CourtsListScreen> {
 
   Future<void> _logout() async {
     context.read<NotificationProvider>().disconnect();
-    await context.read<AuthProvider>().signOut();
+    final confirmed = await context.read<AuthProvider>().signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      MaterialPageRoute(
+        builder: (_) => LoginScreen(
+          notice: confirmed ? null : 'Odjava na serveru nije potvrđena — lokalna sesija je završena.',
+        ),
+      ),
       (_) => false,
     );
   }

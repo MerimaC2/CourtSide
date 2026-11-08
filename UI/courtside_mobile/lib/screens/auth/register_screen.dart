@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../utils/util.dart';
 import '../../utils/validators.dart';
 import '../courts/courts_list_screen.dart';
+import '../../providers/api_error.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -54,7 +55,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         (_) => false,
       );
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -85,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _firstNameController,
                         decoration: InputDecoration(labelText: tr(context, 'Ime')),
                         validator: (v) => (v == null || v.trim().isEmpty)
-                            ? tr(context, 'Unesite ime')
+                            ? trMessage(context, 'Unesite ime')
                             : null,
                       ),
                     ),
@@ -95,7 +96,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         controller: _lastNameController,
                         decoration: InputDecoration(labelText: tr(context, 'Prezime')),
                         validator: (v) => (v == null || v.trim().isEmpty)
-                            ? tr(context, 'Unesite prezime')
+                            ? trMessage(context, 'Unesite prezime')
                             : null,
                       ),
                     ),
@@ -108,9 +109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: tr(context, 'Korisničko ime'),
                     prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? tr(context, 'Unesite korisničko ime')
-                      : null,
+                  validator: (v) => validateUsername(context, v),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
@@ -145,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   validator: (v) => (v == null || v.length < 6)
-                      ? tr(context, 'Lozinka mora imati bar 6 znakova')
+                      ? trMessage(context, 'Lozinka mora imati najmanje 6 znakova.')
                       : null,
                 ),
                 const SizedBox(height: 24),

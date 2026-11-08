@@ -8,7 +8,9 @@ import '../../providers/profile_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/image_validation.dart';
 import '../../utils/util.dart';
+import '../../utils/validators.dart';
 import '../../widgets/dialog_header.dart';
+import '../../providers/api_error.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -61,7 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
@@ -83,17 +85,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       Authorization.lastName = updated.lastName;
       if (mounted) showSuccess(context, 'Profil je ažuriran.');
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// The picture as the avatar loads it, which is also the key the image cache keeps it under.
+  NetworkImage get _profileImage => NetworkImage(
+        context.read<ProfileProvider>().imageUrl,
+        headers: {'Authorization': 'Bearer ${Authorization.token}'},
+      );
 
   Future<void> _pickImage() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
     if (!mounted) return;
     final provider = context.read<ProfileProvider>();
+    final cachedImage = _profileImage;
     try {
       final bytes = await picked.readAsBytes();
       final contentType = imageContentTypeFor(picked.name);
@@ -103,11 +112,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
       await provider.uploadImage(bytes, picked.name, contentType);
+      // The new picture is served from the same address as the old one, so the cached copy
+      // has to go for it to be fetched — here and whenever the profile is opened again.
+      await cachedImage.evict();
       if (!mounted) return;
-      setState(() => _imageVersion++);
+      final profile = _profile!;
+      setState(() {
+        _profile = Profile(
+          id: profile.id,
+          username: profile.username,
+          email: profile.email,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          phoneNumber: profile.phoneNumber,
+          hasProfileImage: true,
+        );
+        _imageVersion++;
+      });
       showSuccess(context, 'Profilna slika je ažurirana.');
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -132,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   controller: currentController,
                   obscureText: true,
                   decoration: InputDecoration(labelText: tr(ctx, 'Trenutna lozinka')),
-                  validator: (v) => (v == null || v.isEmpty) ? tr(ctx, 'Unesite lozinku') : null,
+                  validator: (v) => (v == null || v.isEmpty) ? trMessage(ctx, 'Unesite lozinku') : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -140,7 +164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   obscureText: true,
                   decoration: InputDecoration(labelText: tr(ctx, 'Nova lozinka')),
                   validator: (v) => (v == null || v.length < 6)
-                      ? tr(ctx, 'Lozinka mora imati bar 6 znakova')
+                      ? trMessage(ctx, 'Lozinka mora imati najmanje 6 znakova.')
                       : null,
                 ),
                 const SizedBox(height: 12),
@@ -149,7 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   obscureText: true,
                   decoration: InputDecoration(labelText: tr(ctx, 'Potvrda nove lozinke')),
                   validator: (v) => v != newController.text
-                      ? tr(ctx, 'Lozinke se ne podudaraju')
+                      ? trMessage(ctx, 'Lozinke se ne podudaraju')
                       : null,
                 ),
               ],
@@ -179,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
       if (mounted) showSuccess(context, 'Lozinka je promijenjena.');
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -226,12 +250,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   CircleAvatar(
                     radius: 48,
                     backgroundColor: kPrimaryColor.withValues(alpha: 0.12),
-                    backgroundImage: profile.hasProfileImage
-                        ? NetworkImage(
-                            context.read<ProfileProvider>().imageUrl,
-                            headers: {'Authorization': 'Bearer ${Authorization.token}'},
-                          )
-                        : null,
+                    backgroundImage: profile.hasProfileImage ? _profileImage : null,
                     key: ValueKey(_imageVersion),
                     child: profile.hasProfileImage
                         ? null
@@ -272,20 +291,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextFormField(
               controller: _firstNameController,
               decoration: InputDecoration(labelText: tr(context, 'Ime')),
-              validator: (v) => (v == null || v.trim().isEmpty) ? tr(context, 'Unesite ime') : null,
+              validator: (v) => (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite ime') : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _lastNameController,
               decoration: InputDecoration(labelText: tr(context, 'Prezime')),
               validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? tr(context, 'Unesite prezime') : null,
+                  (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite prezime') : null,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(labelText: tr(context, 'Broj telefona')),
+              validator: (v) => validatePhone(context, v, required: false),
             ),
             const SizedBox(height: 24),
             SizedBox(

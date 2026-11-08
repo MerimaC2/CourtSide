@@ -6,10 +6,15 @@ import '../../providers/auth_provider.dart';
 import '../../utils/app_locale.dart';
 import '../../utils/util.dart';
 import '../courts/courts_list_screen.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
+import '../../providers/api_error.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Shown as soon as the screen opens, e.g. when a sign-out was completed only locally.
+  final String? notice;
+
+  const LoginScreen({super.key, this.notice});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -21,6 +26,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final notice = widget.notice;
+    if (notice != null) {
+      // The snackbar needs this screen's Scaffold, which exists only after the first frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showError(context, notice);
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -38,11 +55,13 @@ class _LoginScreenState extends State<LoginScreen> {
             _passwordController.text,
           );
       if (!mounted) return;
+      // A message left over from the previous session must not follow the user in.
+      ScaffoldMessenger.of(context).clearSnackBars();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const CourtsListScreen()),
       );
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -106,7 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 textInputAction: TextInputAction.next,
                                 validator: (v) => (v == null || v.trim().isEmpty)
-                                    ? tr(context, 'Unesite korisničko ime')
+                                    ? trMessage(context, 'Unesite korisničko ime')
                                     : null,
                               ),
                               const SizedBox(height: 16),
@@ -127,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 textInputAction: TextInputAction.done,
                                 onFieldSubmitted: (_) => _login(),
                                 validator: (v) => (v == null || v.isEmpty)
-                                    ? tr(context, 'Unesite lozinku')
+                                    ? trMessage(context, 'Unesite lozinku')
                                     : null,
                               ),
                               const SizedBox(height: 24),
@@ -145,7 +164,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                      ),
+                      child: Text(tr(context, 'Zaboravljena lozinka?')),
+                    ),
                     TextButton(
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const RegisterScreen()),
