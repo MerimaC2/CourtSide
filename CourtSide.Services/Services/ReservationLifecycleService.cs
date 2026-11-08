@@ -62,6 +62,12 @@ public class ReservationLifecycleService : BackgroundService
             var settled = await payments.ReconcilePendingRefundsAsync(cancellationToken);
             if (settled > 0)
                 _logger.LogInformation("Zatvoreno {Count} povrata koji su čekali potvrdu provajdera.", settled);
+
+            // Likewise a card payment the server never heard back about (the app lost its
+            // connection right after the payment sheet) is completed from Stripe's own record.
+            var paid = await payments.ReconcilePendingPaymentsAsync(cancellationToken);
+            if (paid > 0)
+                _logger.LogInformation("Evidentirano {Count} online plaćanja koja su čekala potvrdu.", paid);
         }
         catch (Exception ex)
         {

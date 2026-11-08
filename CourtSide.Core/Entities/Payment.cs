@@ -35,6 +35,7 @@ public class Payment : BaseEntity
     /// <summary>Why the refund failed, kept so an administrator can act on it.</summary>
     public string? RefundFailureReason { get; set; }
 
-    /// <summary>Administrator who confirmed that cash was handed back; null for online refunds.</summary>
+    /// <summary>Administrator who confirmed a manual refund (cash, or card payment without a processor
+    /// reference) as handed back; null for online refunds.</summary>
     public int? RefundConfirmedById { get; set; }
 }

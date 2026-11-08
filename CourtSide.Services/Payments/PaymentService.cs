@@ -26,16 +26,23 @@ public interface IPaymentService
     /// <summary>Admin: records that cash was collected on-site.</summary>
     Task<PaymentDto> MarkCashPaidAsync(int reservationId);
 
-    /// <summary>Starts a refund of a collected payment. Online refunds settle against Stripe; cash
-    /// refunds stay pending until an administrator confirms the money was handed back. No-op if
-    /// nothing was collected.</summary>
+    /// <summary>Starts a refund of a collected payment. Online refunds settle against Stripe; manual
+    /// refunds (cash, or a card payment with no processor reference) stay pending until an
+    /// administrator confirms the money was handed back. A refund the processor cannot take is
+    /// recorded as failed, with the reason, and returned rather than thrown. No-op if nothing was
+    /// collected.</summary>
     Task<PaymentDto?> RefundAsync(int reservationId);
 
-    /// <summary>Admin: confirms that a cash refund was physically paid out.</summary>
+    /// <summary>Admin: confirms that a manual refund (cash, or a card payment with no processor
+    /// reference) was physically paid out.</summary>
     Task<PaymentDto> ConfirmCashRefundAsync(int reservationId);
 
     /// <summary>Settles online refunds still pending at the processor. Returns how many closed.</summary>
     Task<int> ReconcilePendingRefundsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Completes card payments that Stripe has collected but the server has not yet heard
+    /// about (the client's check and the webhook both missed). Returns how many were completed.</summary>
+    Task<int> ReconcilePendingPaymentsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Server-side check of the Stripe PaymentIntent status; finalizes the payment if it succeeded.
     /// The client calls this right after the payment sheet closes, so payments work without the webhook.</summary>
@@ -78,10 +85,9 @@ public class PaymentService : IPaymentService
 
     public async Task<PaymentIntentDto> CreateIntentAsync(int reservationId)
     {
-        EnsureStripeConfigured();
-
         var payment = await LoadAsync(reservationId);
         EnsureOwnerOrAdmin(payment.Reservation);
+        EnsureStripeConfigured();
         EnsurePolicy(payment, PaymentAction.StartOnlinePayment);
 
         var requestOptions = new RequestOptions { ApiKey = _stripe.SecretKey };
@@ -147,6 +153,11 @@ public class PaymentService : IPaymentService
                     return null;
                 }
 
+                // The money may still arrive for this intent; a second charge must not be started
+                // and the sheet cannot be shown for it either.
+                if (existing.Status == "processing")
+                    throw new BusinessException("Plaćanje je u obradi — sačekajte potvrdu prije novog pokušaja.");
+
                 var sameCharge = existing.Amount == amountMinor &&
                     string.Equals(existing.Currency, payment.Currency, StringComparison.OrdinalIgnoreCase);
                 if (ReusableIntentStatuses.Contains(existing.Status) && sameCharge)
@@ -155,6 +166,17 @@ public class PaymentService : IPaymentService
                 _logger.LogInformation(
                     "Rezervacija {Id}: intent {Old} u stanju '{Status}' se zamjenjuje novim.",
                     payment.ReservationId, existing.Id, existing.Status);
+
+                // An open intent with a different amount would stay payable through its old client
+                // secret; it is closed so only the replacement can be charged.
+                if (CancellableIntentStatuses.Contains(existing.Status))
+                {
+                    try { await service.CancelAsync(existing.Id, requestOptions: requestOptions); }
+                    catch (StripeException ex)
+                    {
+                        _logger.LogWarning(ex, "Stripe: stari intent {Intent} nije zatvoren.", existing.Id);
+                    }
+                }
             }
         }
 
@@ -174,7 +196,7 @@ public class PaymentService : IPaymentService
     /// <summary>Intent states the client can still pay from; anything else needs a fresh intent.</summary>
     private static readonly HashSet<string> ReusableIntentStatuses = new(StringComparer.Ordinal)
     {
-        "requires_payment_method", "requires_confirmation", "requires_action", "processing"
+        "requires_payment_method", "requires_confirmation", "requires_action"
     };
 
     public async Task<PaymentDto> MarkCashPaidAsync(int reservationId)
@@ -200,7 +222,8 @@ public class PaymentService : IPaymentService
         return ToDto(payment);
     }
 
-    /// <summary>Admin: confirms that cash was physically handed back to the client.</summary>
+    /// <summary>Admin: confirms that a manual refund (cash, or a card payment with no processor
+    /// reference) was physically handed back to the client.</summary>
     public async Task<PaymentDto> ConfirmCashRefundAsync(int reservationId)
     {
         var payment = await LoadAsync(reservationId);
@@ -229,7 +252,7 @@ public class PaymentService : IPaymentService
             PolicyContext(payment));
 
     private PaymentPolicy.Context PolicyContext(Payment payment) =>
-        new(payment.Reservation.CompletedAt, _clock.UtcNow);
+        new(payment.Reservation.CompletedAt, _clock.UtcNow, payment.StripePaymentIntentId);
 
     public async Task<PaymentDto?> RefundAsync(int reservationId)
     {
@@ -238,7 +261,26 @@ public class PaymentService : IPaymentService
         if (payment is null) return null;
 
         if (EnsurePolicy(payment, PaymentAction.Refund) == PolicyOutcome.NoOp)
-            return ToDto(payment); // nothing collected, or the refund is already under way
+        {
+            // Nothing collected, or the refund is already under way. An online payment that was
+            // started but never completed still has a live client secret, so the intent is closed
+            // at the processor — otherwise the card could be charged for a booking that no longer
+            // exists.
+            await CancelOpenIntentAsync(payment);
+            return ToDto(payment);
+        }
+
+        var manual = PaymentPolicy.IsManualRefund(payment.Method, payment.StripePaymentIntentId);
+
+        // Without a key nothing can reach the processor. The attempt is recorded as failed, with the
+        // reason, so the payment still shows the money is owed and the refund can be retried once
+        // the key is set.
+        if (!manual && !_stripe.IsConfigured)
+        {
+            payment.RefundRequestedAt = _clock.UtcNow;
+            await MarkRefundFailedAsync(payment, "Online plaćanje nije dostupno (Stripe nije konfigurisan).");
+            return ToDto(payment);
+        }
 
         var number = ReservationNumber.Short(payment.Reservation.ReservationNumber);
 
@@ -257,18 +299,22 @@ public class PaymentService : IPaymentService
                 "Povrat je pokrenut",
                 payment.Method == PaymentMethod.Cash
                     ? $"Povrat za rezervaciju {number} je odobren — sredstva preuzimate na recepciji."
-                    : $"Povrat za rezervaciju {number} je pokrenut kod platnog provajdera.");
+                    : manual
+                        ? $"Povrat za rezervaciju {number} je odobren — administrator će ga izvršiti ručno."
+                        : $"Povrat za rezervaciju {number} je pokrenut kod platnog provajdera.");
             await transaction.CommitAsync();
         }
 
-        // Cash leaves the till by hand, so it stays pending until an administrator confirms it.
-        if (payment.Method == PaymentMethod.Cash || string.IsNullOrEmpty(payment.StripePaymentIntentId))
+        // A manual refund is paid back by hand, so it stays pending until an administrator confirms it.
+        if (manual)
             return ToDto(payment);
 
-        EnsureStripeConfigured();
+        // Only the provider call is guarded: its failure is a failed refund. Recording the answer is
+        // left outside, since a database fault there says nothing about the money.
+        Refund refund;
         try
         {
-            var refund = await new RefundService().CreateAsync(
+            refund = await new RefundService().CreateAsync(
                 new RefundCreateOptions { PaymentIntent = payment.StripePaymentIntentId },
                 new RequestOptions
                 {
@@ -276,17 +322,73 @@ public class PaymentService : IPaymentService
                     // Guards against a repeated call (retry, double click, reconcile) refunding twice.
                     IdempotencyKey = $"refund-{payment.Id}-{payment.RefundRequestedAt:O}"
                 });
-
-            await ApplyRefundResultAsync(payment, refund);
         }
         catch (StripeException ex)
         {
             _logger.LogError(ex, "Stripe: povrat nije uspio za rezervaciju {Id}.", reservationId);
             await MarkRefundFailedAsync(payment, ex.StripeError?.Message ?? ex.Message);
+            return ToDto(payment);
+        }
+        catch (OperationCanceledException ex)
+        {
+            // No cancellation token is passed to the call, so this is the HTTP client giving up on a
+            // slow answer. Stripe may still have created the refund, so it is not declared failed: it
+            // stays pending and the sweep settles it from what Stripe reports for the intent.
+            _logger.LogWarning(ex, "Povrat za rezervaciju {Id}: procesor nije odgovorio na vrijeme, stanje se naknadno provjerava.",
+                reservationId);
+            return ToDto(payment);
+        }
+        catch (Exception ex)
+        {
+            // A network failure is not a Stripe error, yet the outcome is the same: the money has not
+            // gone back. Recorded as failed so an administrator can retry it, instead of the payment
+            // sitting in "pending" with nothing to chase.
+            _logger.LogError(ex, "Povrat nije stigao do procesora za rezervaciju {Id}.", reservationId);
+            await MarkRefundFailedAsync(payment, "Platni provajder nije dostupan.");
+            return ToDto(payment);
         }
 
+        // Should saving fail here, the error surfaces while the payment stays pending, and the sweep
+        // adopts the refund Stripe actually created.
+        await ApplyRefundResultAsync(payment, refund);
         return ToDto(payment);
     }
+
+    /// <summary>
+    /// Closes a Stripe intent that was started but never paid, once the booking is cancelled. Best
+    /// effort — the processor being unreachable must not stop the cancellation.
+    /// </summary>
+    private async Task CancelOpenIntentAsync(Payment payment)
+    {
+        if (payment.Reservation.Status != ReservationStatus.Cancelled ||
+            payment.Method != PaymentMethod.Stripe ||
+            !PaymentPolicy.CanChangeMethod(payment.Status) ||
+            string.IsNullOrEmpty(payment.StripePaymentIntentId) ||
+            !_stripe.IsConfigured)
+            return;
+
+        try
+        {
+            var service = new PaymentIntentService();
+            var requestOptions = new RequestOptions { ApiKey = _stripe.SecretKey };
+            var intent = await service.GetAsync(payment.StripePaymentIntentId, requestOptions: requestOptions);
+            if (CancellableIntentStatuses.Contains(intent.Status))
+                await service.CancelAsync(intent.Id, requestOptions: requestOptions);
+        }
+        catch (Exception ex)
+        {
+            // Includes an HTTP timeout, which Stripe.net reports as a cancellation; nothing here
+            // takes a caller's cancellation token, so there is no cancellation to honour.
+            _logger.LogWarning(ex, "Stripe: intent {Intent} nije zatvoren nakon otkazivanja rezervacije {Id}.",
+                payment.StripePaymentIntentId, payment.ReservationId);
+        }
+    }
+
+    /// <summary>Intent states Stripe still lets the caller cancel.</summary>
+    private static readonly HashSet<string> CancellableIntentStatuses = new(StringComparer.Ordinal)
+    {
+        "requires_payment_method", "requires_confirmation", "requires_action", "requires_capture"
+    };
 
     /// <summary>
     /// Settles the local payment against what the processor actually reports. A refund can come back
@@ -310,7 +412,7 @@ public class PaymentService : IPaymentService
                     await _db.SaveChangesAsync();
                     await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentRefunded,
                         "Povrat izvršen",
-                        $"Izvršen je povrat za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)}.");
+                        $"Povrat za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je izvršen.");
                     await transaction.CommitAsync();
                 }
                 return;
@@ -328,6 +430,14 @@ public class PaymentService : IPaymentService
 
     private async Task MarkRefundFailedAsync(Payment payment, string reason)
     {
+        // The webhook, the sweep and a retry can all report the same failure; the client is told
+        // once, while whatever the caller stamped on the payment is still kept.
+        if (payment.Status == PaymentStatus.RefundFailed && payment.RefundFailureReason == reason)
+        {
+            await _db.SaveChangesAsync();
+            return;
+        }
+
         payment.Status = PaymentStatus.RefundFailed;
         payment.RefundFailureReason = reason;
         payment.UpdatedAt = _clock.UtcNow;
@@ -345,32 +455,96 @@ public class PaymentService : IPaymentService
     {
         if (!_stripe.IsConfigured) return 0;
 
-        // Only online refunds are chased: a cash refund waits for a person, not for the processor.
-        var cutoff = _clock.UtcNow.AddMinutes(-2);
+        // Only refunds sent to the processor are chased: a manual refund waits for a person, not for
+        // the processor. The PaymentIntent id is also what scopes the lookup below to this payment —
+        // without it Stripe would list the refunds of the whole account.
+        // The grace period outlasts one refund call to Stripe including its network retries, so a
+        // request still waiting on the processor is never settled from here at the same time.
+        var cutoff = _clock.UtcNow.AddMinutes(-10);
         var pending = await _db.Payments.Include(p => p.Reservation)
             .Where(p => p.Status == PaymentStatus.RefundPending &&
                         p.Method == PaymentMethod.Stripe &&
-                        p.StripeRefundId != null &&
+                        !string.IsNullOrEmpty(p.StripePaymentIntentId) &&
                         p.RefundRequestedAt < cutoff)
             .ToListAsync(cancellationToken);
 
         var settled = 0;
+        var requestOptions = new RequestOptions { ApiKey = _stripe.SecretKey };
+        var refunds = new RefundService();
         foreach (var payment in pending)
         {
             try
             {
-                var refund = await new RefundService().GetAsync(payment.StripeRefundId!,
-                    requestOptions: new RequestOptions { ApiKey = _stripe.SecretKey },
-                    cancellationToken: cancellationToken);
+                Refund? refund;
+                if (payment.StripeRefundId is not null)
+                {
+                    refund = await refunds.GetAsync(payment.StripeRefundId, requestOptions: requestOptions,
+                        cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    // Pending without a refund id: the process stopped between recording the intent
+                    // and hearing back from Stripe. Either the refund was created and its id lost, in
+                    // which case it is adopted here, or it never left — then it is marked failed so an
+                    // administrator can retry, rather than waiting for a reply that will never come.
+                    var existing = await refunds.ListAsync(
+                        new RefundListOptions { PaymentIntent = payment.StripePaymentIntentId, Limit = 1 },
+                        requestOptions, cancellationToken);
+                    refund = existing.Data.FirstOrDefault();
+                    if (refund is null)
+                    {
+                        await MarkRefundFailedAsync(payment, "Povrat nije pokrenut kod platnog provajdera.");
+                        settled++;
+                        continue;
+                    }
+                }
+
                 await ApplyRefundResultAsync(payment, refund);
                 if (payment.Status != PaymentStatus.RefundPending) settled++;
             }
             catch (StripeException ex)
             {
-                _logger.LogWarning(ex, "Stripe: provjera povrata {Refund} nije uspjela.", payment.StripeRefundId);
+                _logger.LogWarning(ex, "Stripe: provjera povrata za rezervaciju {Id} nije uspjela.", payment.ReservationId);
             }
         }
         return settled;
+    }
+
+    public async Task<int> ReconcilePendingPaymentsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_stripe.IsConfigured) return 0;
+
+        // Only a succeeded intent is acted on: it is final, and completing a payment is idempotent,
+        // so a sheet still open on the client is never disturbed. The window keeps abandoned
+        // intents from being polled forever; a card payment is normally settled within minutes.
+        var since = _clock.UtcNow.AddDays(-1);
+        var pending = await _db.Payments.Include(p => p.Reservation)
+            .Where(p => p.Status == PaymentStatus.Pending &&
+                        p.Method == PaymentMethod.Stripe &&
+                        !string.IsNullOrEmpty(p.StripePaymentIntentId) &&
+                        (p.UpdatedAt ?? p.CreatedAt) > since)
+            .ToListAsync(cancellationToken);
+
+        var completed = 0;
+        var requestOptions = new RequestOptions { ApiKey = _stripe.SecretKey };
+        var intents = new PaymentIntentService();
+        foreach (var payment in pending)
+        {
+            try
+            {
+                var intent = await intents.GetAsync(payment.StripePaymentIntentId, requestOptions: requestOptions,
+                    cancellationToken: cancellationToken);
+                if (intent.Status != "succeeded") continue;
+
+                await FinalizeSucceededAsync(payment);
+                completed++;
+            }
+            catch (StripeException ex)
+            {
+                _logger.LogWarning(ex, "Stripe: provjera plaćanja za rezervaciju {Id} nije uspjela.", payment.ReservationId);
+            }
+        }
+        return completed;
     }
 
     public async Task HandleWebhookAsync(string json, string signature)
@@ -428,9 +602,12 @@ public class PaymentService : IPaymentService
 
     private async Task HandleRefundEventAsync(Refund refund)
     {
+        // A refund without a PaymentIntent is matched by its own id only; comparing a null intent
+        // would pick up any payment that never had one.
+        var intentId = refund.PaymentIntentId;
         var payment = await _db.Payments.Include(p => p.Reservation)
             .FirstOrDefaultAsync(p => p.StripeRefundId == refund.Id ||
-                                      p.StripePaymentIntentId == refund.PaymentIntentId);
+                                      (intentId != null && p.StripePaymentIntentId == intentId));
         if (payment is null)
         {
             _logger.LogWarning("Stripe webhook: nepoznat povrat {Id}.", refund.Id);
@@ -442,9 +619,9 @@ public class PaymentService : IPaymentService
 
     public async Task<PaymentDto> VerifyAsync(int reservationId)
     {
-        EnsureStripeConfigured();
         var payment = await LoadAsync(reservationId);
         EnsureOwnerOrAdmin(payment.Reservation);
+        EnsureStripeConfigured();
 
         if (payment.Status == PaymentStatus.Completed) return ToDto(payment);
         if (string.IsNullOrEmpty(payment.StripePaymentIntentId))
@@ -504,12 +681,24 @@ public class PaymentService : IPaymentService
         if (payment.Status == PaymentStatus.Completed) return;
 
         payment.Status = PaymentStatus.Completed;
-        payment.PaidAt = DateTime.UtcNow;
-        payment.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
-            "Plaćanje uspješno",
-            $"Online plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je zaprimljeno.");
+        payment.PaidAt = _clock.UtcNow;
+        payment.UpdatedAt = _clock.UtcNow;
+
+        await using (var transaction = await _db.Database.BeginTransactionAsync())
+        {
+            await _db.SaveChangesAsync();
+            await _notifications.CreateAsync(payment.Reservation.ClientId, NotificationType.PaymentCompleted,
+                "Plaćanje uspješno",
+                $"Online plaćanje za rezervaciju {ReservationNumber.Short(payment.Reservation.ReservationNumber)} je zaprimljeno.");
+            await transaction.CommitAsync();
+        }
+
+        // The charge landed after the booking was cancelled (the sheet was open while an
+        // administrator or the sweep cancelled it). The admin sees a refundable payment; this
+        // makes the situation visible in the log as well.
+        if (payment.Reservation.Status == ReservationStatus.Cancelled)
+            _logger.LogWarning("Rezervacija {Id} je otkazana, a plaćanje je naknadno zaprimljeno — potreban je povrat.",
+                payment.ReservationId);
     }
 
     private async Task<Payment> LoadAsync(int reservationId)

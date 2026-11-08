@@ -12,7 +12,8 @@ public enum PaymentAction
     /// <summary>Money already collected is given back.</summary>
     Refund = 3,
 
-    /// <summary>Administrator confirms that cash was physically handed back.</summary>
+    /// <summary>Administrator confirms that a manual refund (cash, or a card payment with no
+    /// processor reference) was paid back by hand.</summary>
     ConfirmCashRefund = 4
 }
 

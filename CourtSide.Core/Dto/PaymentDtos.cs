@@ -33,6 +33,9 @@ public class PaymentDto
     public bool CanCollectCash { get; set; }
     public bool CanStartOnlinePayment { get; set; }
     public bool CanRefund { get; set; }
+
+    /// <summary>Whether an administrator may confirm a manual refund (cash, or a card payment with no
+    /// processor reference) as paid back.</summary>
     public bool CanConfirmCashRefund { get; set; }
 
     /// <summary>Raw processor status, filled only by the verification call.</summary>

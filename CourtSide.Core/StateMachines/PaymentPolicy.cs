@@ -32,27 +32,28 @@ public static class PaymentPolicy
 
     /// <summary>
     /// Extra context the rules need beyond the two statuses: when the slot finished (for the cash
-    /// window) and what "now" is.
+    /// window), what "now" is, and the processor's reference for the payment (the Stripe
+    /// PaymentIntent id), which decides who settles a refund.
     /// </summary>
-    public readonly record struct Context(DateTime? CompletedAt, DateTime UtcNow);
+    public readonly record struct Context(DateTime? CompletedAt, DateTime UtcNow, string? ProcessorReference);
 
     public static PolicyOutcome Evaluate(ReservationStatus reservation, PaymentStatus payment,
-        PaymentMethod method, PaymentAction action, Context context = default) => action switch
+        PaymentMethod method, PaymentAction action, Context context) => action switch
     {
         PaymentAction.CollectCash => CollectCash(reservation, payment, context),
         PaymentAction.StartOnlinePayment => StartOnlinePayment(reservation, payment),
         PaymentAction.Refund => Refund(reservation, payment),
-        PaymentAction.ConfirmCashRefund => ConfirmCashRefund(reservation, payment, method),
+        PaymentAction.ConfirmCashRefund => ConfirmCashRefund(reservation, payment, method, context),
         _ => PolicyOutcome.Denied
     };
 
     public static bool IsAllowed(ReservationStatus reservation, PaymentStatus payment,
-        PaymentMethod method, PaymentAction action, Context context = default)
+        PaymentMethod method, PaymentAction action, Context context)
         => Evaluate(reservation, payment, method, action, context) == PolicyOutcome.Allowed;
 
     /// <summary>Throws with the reason when the action is not allowed; returns the outcome otherwise.</summary>
     public static PolicyOutcome EnsureAllowed(ReservationStatus reservation, PaymentStatus payment,
-        PaymentMethod method, PaymentAction action, Context context = default)
+        PaymentMethod method, PaymentAction action, Context context)
     {
         var outcome = Evaluate(reservation, payment, method, action, context);
         if (outcome == PolicyOutcome.Denied)
@@ -65,6 +66,13 @@ public static class PaymentPolicy
     /// paid in cash could later be recorded as a card payment.
     /// </summary>
     public static bool CanChangeMethod(PaymentStatus payment) => NotCollected.Contains(payment);
+
+    /// <summary>
+    /// A refund the processor cannot carry out: cash, or a card payment with no processor reference
+    /// to refund against. The money is paid back by hand and an administrator confirms it.
+    /// </summary>
+    public static bool IsManualRefund(PaymentMethod method, string? processorReference)
+        => method == PaymentMethod.Cash || string.IsNullOrEmpty(processorReference);
 
     private static PolicyOutcome CollectCash(ReservationStatus reservation, PaymentStatus payment, Context context)
     {
@@ -106,10 +114,10 @@ public static class PaymentPolicy
     }
 
     private static PolicyOutcome ConfirmCashRefund(ReservationStatus reservation, PaymentStatus payment,
-        PaymentMethod method)
+        PaymentMethod method, Context context)
         => reservation == ReservationStatus.Cancelled &&
            payment == PaymentStatus.RefundPending &&
-           method == PaymentMethod.Cash
+           IsManualRefund(method, context.ProcessorReference)
             ? PolicyOutcome.Allowed // an online refund is confirmed by the processor, not by a person
             : PolicyOutcome.Denied;
 
