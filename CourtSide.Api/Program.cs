@@ -147,8 +147,8 @@ builder.Services.AddHttpContextAccessor();
 // ----- MVC + JSON (enums as strings) -----
 builder.Services.AddControllers(options =>
     {
-        // FluentValidation owns the validation messages; without this, non-nullable reference
-        // types also emit MVC's own English "field is required" text alongside them.
+        // FluentValidation owns the validation messages, so MVC does not add its own English
+        // "field is required" text for non-nullable reference types.
         options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
     })
     .AddJsonOptions(o =>

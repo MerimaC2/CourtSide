@@ -76,9 +76,9 @@ public class CourtService : BaseCrudService<Court, CourtDto, CourtUpsertDto, Cou
 
     /// <summary>
     /// Refuses a schedule change that would strand existing bookings. Closing a weekday or
-    /// narrowing its hours does not cancel anything, so without this the client would keep a
-    /// confirmed booking for a time the court is now closed, while the slot itself disappears
-    /// from the schedule. The administrator has to cancel those reservations first, the same way
+    /// narrowing its hours does not cancel anything, so a confirmed booking for a time the court
+    /// is no longer open would remain while its slot disappears from the schedule. The
+    /// administrator has to cancel those reservations first, the same way
     /// reference data in use cannot simply be deleted.
     /// </summary>
     private async Task EnsureNoBookingsOutsideAsync(int courtId, List<CourtWorkingHoursDto> newHours)

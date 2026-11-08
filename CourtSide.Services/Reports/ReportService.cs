@@ -334,8 +334,7 @@ public class ReportService : IReportService
                 Count = reservations.Count(r => r.CourtId == court.Id),
                 Reserved = reserved,
                 Available = available,
-                // Working hours can be narrowed after a booking was made, which would otherwise
-                // put a court above 100 %.
+                // Capped at 100 %: working hours can be narrowed after a booking was made.
                 Occupancy = available > 0 ? Math.Clamp(reserved / available, 0, 1) : 0
             };
         })

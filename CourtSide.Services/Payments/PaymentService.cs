@@ -635,7 +635,7 @@ public class PaymentService : IPaymentService
         }
         catch (StripeException ex)
         {
-            // Without this the provider's failure would surface as a 500, as if the API were broken.
+            // A provider failure is reported as a business error (400) with Stripe's message, not as a 500.
             _logger.LogWarning(ex, "Stripe: provjera plaćanja nije uspjela za rezervaciju {Id}.", reservationId);
             throw new BusinessException($"Stripe greška: {ex.StripeError?.Message ?? ex.Message}");
         }
