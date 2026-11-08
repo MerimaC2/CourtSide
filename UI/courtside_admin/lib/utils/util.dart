@@ -37,7 +37,14 @@ String translateReservationStatus(BuildContext context, String status) {
 
 /// Display label for a payment status (see [translateReservationStatus]).
 String translatePaymentStatus(BuildContext context, String status) {
-  if (context.watch<LocaleProvider>().language == AppLanguage.en) return status;
+  if (context.watch<LocaleProvider>().language == AppLanguage.en) {
+    return switch (status) {
+      'Completed' => 'Paid',
+      'RefundPending' => 'Refund pending',
+      'RefundFailed' => 'Refund failed',
+      _ => status,
+    };
+  }
   return switch (status) {
     'Pending' => 'Na čekanju',
     'Completed' => 'Plaćeno',

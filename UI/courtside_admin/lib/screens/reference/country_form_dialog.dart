@@ -73,7 +73,7 @@ class _CountryFormDialogState extends State<CountryFormDialog> {
                 controller: _nameController,
                 decoration: InputDecoration(labelText: tr(context, 'Naziv')),
                 validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite naziv') : null,
+                    (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite naziv') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(

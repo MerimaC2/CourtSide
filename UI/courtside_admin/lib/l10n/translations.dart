@@ -17,6 +17,8 @@ const Map<String, String> _dict = {
   'Izvještaji': 'Reports',
   'Referentni podaci': 'Reference data',
   'Odjava': 'Logout',
+  'Odjava na serveru nije potvrđena — lokalna sesija je završena.':
+      'The server did not confirm the logout — the local session has ended.',
 
   // Login
   'Administratorska prijava': 'Administrator Login',
@@ -28,6 +30,7 @@ const Map<String, String> _dict = {
   'Ovaj nalog nema administratorska prava.': 'This account does not have administrator privileges.',
 
   // Image upload validation
+  'Slika': 'Image',
   'Poništi odabir': 'Clear selection',
   'Odaberite ispravnu sliku ili poništite odabir.': 'Choose a valid image or clear the selection.',
   'Fajl je prazan.': 'The file is empty.',
@@ -77,8 +80,9 @@ const Map<String, String> _dict = {
   'Petak': 'Friday',
   'Subota': 'Saturday',
   'Nedjelja': 'Sunday',
-  'Teren mora biti otvoren barem jedan dan, a zatvaranje mora biti nakon otvaranja.':
-      'The court must be open at least one day, and closing must be after opening.',
+  'Standardno radno vrijeme (08–22, svaki dan)': 'Standard hours (08–22, every day)',
+  'Teren nema radno vrijeme — neće imati slobodnih termina.':
+      'The court has no working hours — it will have no available slots.',
   'Vrijeme zatvaranja mora biti nakon vremena otvaranja.':
       'Closing time must be after opening time.',
 
@@ -95,10 +99,11 @@ const Map<String, String> _dict = {
   'Slobodno (klik za blokiranje)': 'Available (click to block)',
   'Rezervisano': 'Reserved',
   'Blokirano (klik za odblokiranje)': 'Blocked (click to unblock)',
-  'Termin je već rezervisan.': 'This slot is already reserved.',
   'Razlog (opciono)': 'Reason (optional)',
   'Blokiraj': 'Block',
   'Ukloniti blokadu ovog termina?': 'Remove the block on this slot?',
+  'Blokada obuhvata više termina i bit će uklonjena u cijelosti.':
+      'The block spans several slots and will be removed in full.',
   'Odblokiraj': 'Unblock',
   'Termin je blokiran.': 'Slot blocked.',
   'Blokada je uklonjena.': 'Block removed.',
@@ -107,7 +112,8 @@ const Map<String, String> _dict = {
   'Razlog blokade': 'Block reason',
 
   // Reservations
-  'Termin je već počeo — potvrda više nije moguća.': 'The slot has already started — it can no longer be confirmed.',
+  'Potvrda više nije moguća — termin je već počeo ili je teren deaktiviran.':
+      'It can no longer be confirmed — the slot has already started or the court was deactivated.',
   'Termin je već počeo — rezervaciju više nije moguće potvrditi.': 'The slot has already started — the reservation can no longer be confirmed.',
   'Rezervacija nije potvrđena prije početka termina.': 'The reservation was not confirmed before the slot started.',
   'Odaberite termin iz ponuđenog rasporeda terena.': 'Choose a slot from the court schedule.',
@@ -151,14 +157,21 @@ const Map<String, String> _dict = {
   'Pokreni povrat': 'Start refund',
   'Ponovi povrat': 'Retry refund',
   'Potvrdi povrat gotovine': 'Confirm cash refund',
+  'Potvrdi ručni povrat': 'Confirm manual refund',
   'Da li je gotovina fizički vraćena klijentu?': 'Has the cash been physically returned to the client?',
+  'Da li je novac vraćen klijentu?': 'Has the money been returned to the client?',
   'Povrat gotovine je potvrđen.': 'Cash refund confirmed.',
-  'Povrat je odobren — potvrdite ga kada gotovina bude vraćena.': 'Refund approved — confirm it once the cash is handed back.',
+  'Ručni povrat je potvrđen.': 'Manual refund confirmed.',
+  'Povrat je odobren — potvrdite ga kada novac bude vraćen klijentu.':
+      'Refund approved — confirm it once the money has been returned to the client.',
+  'Povrat je pokrenut kod platnog provajdera — status će se ažurirati kada ga potvrdi.':
+      'The refund was started with the payment provider — the status will update once the provider confirms it.',
+  'Povrat nije uspio': 'Refund failed',
   'Povrat je izvršen.': 'Refund completed.',
   'Povrat zatražen': 'Refund requested',
   'Povrat izvršen': 'Refund completed',
   'Razlog neuspjeha': 'Failure reason',
-  'Otkaži': 'Cancel',
+  'Otkaži': 'Cancel reservation',
   'Potvrdi': 'Confirm',
   'Nema podataka o plaćanju.': 'No payment information.',
   'Plaćeno': 'Paid',
@@ -183,6 +196,9 @@ const Map<String, String> _dict = {
   'Izvještaj je sačuvan.': 'Report saved.',
   'Izvještaj je sačuvan u:': 'Report saved to:',
   'Otvori': 'Open',
+  // Prefixes of the suggested PDF file names
+  'popunjenost': 'occupancy',
+  'rezervacije': 'reservations',
 
   // News
   'Obavijesti': 'News',
@@ -307,7 +323,54 @@ const Map<String, String> _dict = {
   'Rezervacija je već plaćena.': 'The reservation is already paid.',
   'Rezervacija nema evidentirano plaćanje.': 'The reservation has no recorded payment.',
   'Plaćanje je već refundirano.': 'The payment has already been refunded.',
+  'Rezervacija je otkazana pa se na njoj može izvršiti samo povrat sredstava.':
+      'The reservation is cancelled, so only a refund can be made on it.',
+  'Rok za naknadnu evidenciju gotovinske uplate (7 dana) je istekao.':
+      'The period for recording a cash payment afterwards (7 days) has expired.',
+  'Termin je završen — online plaćanje više nije moguće, uplata se evidentira na terenu.':
+      'The slot has ended — online payment is no longer possible; the payment is recorded at the court.',
+  'Povrat je moguć samo za otkazanu rezervaciju. Prvo otkažite rezervaciju.':
+      'A refund is only possible for a cancelled reservation. Cancel the reservation first.',
+  'Nema gotovinskog povrata koji čeka potvrdu.': 'There is no cash refund awaiting confirmation.',
+  'Ova radnja nije dozvoljena za trenutno stanje rezervacije i plaćanja.':
+      'This action is not allowed in the current state of the reservation and payment.',
+  'Plaćanje je u obradi — sačekajte potvrdu prije novog pokušaja.':
+      'The payment is being processed — wait for confirmation before trying again.',
+  'Rezervacija nema pokrenuto online plaćanje.': 'The reservation has no online payment started.',
   'Online plaćanje nije dostupno (Stripe nije konfigurisan).': 'Online payment is unavailable (Stripe is not configured).',
+  // Refund failure reasons the server records on the payment
+  'Platni provajder nije dostupan.': 'The payment provider is unavailable.',
+  'Povrat nije pokrenut kod platnog provajdera.': 'The refund was not started with the payment provider.',
+  'Radno vrijeme mora biti navedeno (prazna lista znači da je teren zatvoren).':
+      'Working hours must be provided (an empty list means the court is closed).',
+  'Naziv može imati najviše 120 znakova.': 'The name can be at most 120 characters long.',
+  'Naziv može imati najviše 100 znakova.': 'The name can be at most 100 characters long.',
+  'Naziv može imati najviše 80 znakova.': 'The name can be at most 80 characters long.',
+  'Naslov može imati najviše 150 znakova.': 'The title can be at most 150 characters long.',
+  'Tekst može imati najviše 4000 znakova.': 'The text can be at most 4000 characters long.',
+  'Naziv centra je obavezan.': 'The sports center name is required.',
+  'Adresa je obavezna.': 'The address is required.',
+  'Odaberite grad.': 'Select a city.',
+  'Geografska širina mora biti između -90 i 90.': 'Latitude must be between -90 and 90.',
+  'Geografska dužina mora biti između -180 i 180.': 'Longitude must be between -180 and 180.',
+  'Naziv terena je obavezan.': 'The court name is required.',
+  'Odaberite sport.': 'Select a sport.',
+  'Odaberite sportski centar.': 'Select a sports center.',
+  'Cijena po satu mora biti veća od 0.': 'The price per hour must be greater than 0.',
+  'Odaberite teren.': 'Select a court.',
+  'Naslov je obavezan.': 'The title is required.',
+  'Tekst obavijesti je obavezan.': 'The announcement text is required.',
+  'Naziv države je obavezan.': 'The country name is required.',
+  'ISO kod može imati najviše 3 znaka.': 'The ISO code can be at most 3 characters long.',
+  'Naziv grada je obavezan.': 'The city name is required.',
+  'Odaberite državu.': 'Select a country.',
+  'Naziv sporta je obavezan.': 'The sport name is required.',
+  'Korisničko ime je obavezno.': 'The username is required.',
+  'Lozinka je obavezna.': 'The password is required.',
+  'Korisničko ime smije sadržavati samo slova bez kvačica, brojeve i znakove - . _ @ +':
+      'The username may contain only letters without diacritics, digits and the characters - . _ @ +',
+  'Korisničko ime smije sadržavati samo slova bez kvačica, brojeve i znakove - . _ @ +.':
+      'The username may contain only letters without diacritics, digits and the characters - . _ @ +.',
   'Stripe webhook nije konfigurisan (nedostaje STRIPE_WEBHOOK_SECRET).':
       'The Stripe webhook is not configured (STRIPE_WEBHOOK_SECRET is missing).',
   'Nevalidan Stripe potpis.': 'Invalid Stripe signature.',
@@ -318,6 +381,8 @@ const Map<String, String> _dict = {
       'The data could not be saved. Check the entry and the records it refers to.',
 
   // Client-side messages (thrown directly by BaseProvider, not the backend)
+  'Server trenutno nije dostupan. Pokušajte ponovo za nekoliko trenutaka.':
+      'The server cannot be reached right now. Please try again in a moment.',
   'Sesija je istekla. Prijavite se ponovo.': 'Your session has expired. Please log in again.',
   'Nemate ovlaštenje za ovu radnju.': 'You are not authorized to perform this action.',
   'Greška pri dohvatu podataka.': 'Error fetching data.',
@@ -337,6 +402,8 @@ const Map<String, String> _entityNames = {
   'recenzija': 'review',
   'obavijest': 'news item',
   'plaćanje': 'payment',
+  'slika': 'image',
+  'korisnik': 'user',
 };
 
 const Map<String, String> _stripePrefixes = {
@@ -345,6 +412,17 @@ const Map<String, String> _stripePrefixes = {
 };
 
 final RegExp _notFoundPattern = RegExp(r"^Ne postoji (.+) sa identifikatorom '(.+)'\.$");
+
+/// A refused reservation status change, naming both statuses as the apps show them.
+final RegExp _statusChangePattern =
+    RegExp(r"^Nije moguća promjena statusa rezervacije sa '(.+)' na '(.+)'\.$");
+
+const Map<String, String> _statusNames = {
+  'Na čekanju': 'Pending',
+  'Potvrđena': 'Confirmed',
+  'Otkazana': 'Cancelled',
+  'Završena': 'Completed',
+};
 
 String _translate(String text, AppLanguage lang) {
   if (lang == AppLanguage.bs) return text;
@@ -355,6 +433,12 @@ String _translate(String text, AppLanguage lang) {
     final entity = _entityNames[notFoundMatch.group(1)] ?? notFoundMatch.group(1)!;
     final named = entity.isEmpty ? entity : entity[0].toUpperCase() + entity.substring(1);
     return "$named with identifier '${notFoundMatch.group(2)}' not found.";
+  }
+  final statusChangeMatch = _statusChangePattern.firstMatch(text);
+  if (statusChangeMatch != null) {
+    String status(int group) =>
+        _statusNames[statusChangeMatch.group(group)] ?? statusChangeMatch.group(group)!;
+    return "The reservation status cannot be changed from '${status(1)}' to '${status(2)}'.";
   }
   for (final entry in _stripePrefixes.entries) {
     if (text.startsWith(entry.key)) {
@@ -371,6 +455,9 @@ String tr(BuildContext context, String bosnianText) =>
 
 /// For one-off runtime messages (snackbars, dynamic text built outside
 /// build(), dialog builders) — reads the current language without
-/// subscribing to rebuilds.
-String trMessage(BuildContext context, String bosnianText) =>
-    _translate(bosnianText, context.read<LocaleProvider>().language);
+/// subscribing to rebuilds. The API puts each of several messages on its own
+/// line, so every line is translated separately.
+String trMessage(BuildContext context, String bosnianText) {
+  final language = context.read<LocaleProvider>().language;
+  return bosnianText.split('\n').map((line) => _translate(line, language)).join('\n');
+}

@@ -82,8 +82,8 @@ class _NewsFormDialogState extends State<NewsFormDialog> {
   }
 
   Future<void> _pickImage() async {
-    final file = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Slika', extensions: ['jpg', 'jpeg', 'png', 'webp']),
+    final file = await openFile(acceptedTypeGroups: [
+      XTypeGroup(label: trMessage(context, 'Slika'), extensions: const ['jpg', 'jpeg', 'png', 'webp']),
     ]);
     if (file == null) return;
     final bytes = await file.readAsBytes();
@@ -177,7 +177,7 @@ class _NewsFormDialogState extends State<NewsFormDialog> {
                   controller: _titleController,
                   decoration: InputDecoration(labelText: tr(context, 'Naslov')),
                   validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? tr(context, 'Unesite naslov') : null,
+                      (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite naslov') : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -185,7 +185,7 @@ class _NewsFormDialogState extends State<NewsFormDialog> {
                   maxLines: 4,
                   decoration: InputDecoration(labelText: tr(context, 'Tekst')),
                   validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? tr(context, 'Unesite tekst') : null,
+                      (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite tekst') : null,
                 ),
                 const SizedBox(height: 12),
                 InkWell(

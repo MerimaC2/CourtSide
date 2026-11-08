@@ -81,7 +81,7 @@ class _CityFormDialogState extends State<CityFormDialog> {
                 controller: _nameController,
                 decoration: InputDecoration(labelText: tr(context, 'Naziv')),
                 validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite naziv') : null,
+                    (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite naziv') : null,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
@@ -92,7 +92,7 @@ class _CityFormDialogState extends State<CityFormDialog> {
                     .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                     .toList(),
                 onChanged: (v) => setState(() => _countryId = v),
-                validator: (v) => v == null ? tr(context, 'Odaberite državu') : null,
+                validator: (v) => v == null ? trMessage(context, 'Odaberite državu') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
