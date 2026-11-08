@@ -103,8 +103,8 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
   }
 
   Future<void> _pickImage() async {
-    final file = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Slika', extensions: ['jpg', 'jpeg', 'png', 'webp']),
+    final file = await openFile(acceptedTypeGroups: [
+      XTypeGroup(label: trMessage(context, 'Slika'), extensions: const ['jpg', 'jpeg', 'png', 'webp']),
     ]);
     if (file == null) return;
     final bytes = await file.readAsBytes();
@@ -191,14 +191,15 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     'Sunday',
   ];
 
-  final List<bool> _dayOpen = List<bool>.filled(7, true);
+  final List<bool> _dayOpen = List<bool>.filled(7, false);
   final List<TimeOfDay> _dayOpenTime =
       List<TimeOfDay>.filled(7, const TimeOfDay(hour: 8, minute: 0));
   final List<TimeOfDay> _dayCloseTime =
       List<TimeOfDay>.filled(7, const TimeOfDay(hour: 22, minute: 0));
 
+  /// Loads the stored schedule into the form. A new court starts with every day closed (an
+  /// empty schedule means the court is closed); [_applyStandardHours] fills in a standard week.
   void _loadWorkingHours(List<CourtWorkingHours> hours) {
-    if (hours.isEmpty) return;
     for (var i = 0; i < 7; i++) {
       final match = hours.where((h) => h.dayOfWeek == _apiDayOfWeek[i]);
       if (match.isEmpty) {
@@ -209,6 +210,17 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
       _dayOpenTime[i] = _parseTime(match.first.openTime, const TimeOfDay(hour: 8, minute: 0));
       _dayCloseTime[i] = _parseTime(match.first.closeTime, const TimeOfDay(hour: 22, minute: 0));
     }
+  }
+
+  /// Opens the court every day from 08:00 to 22:00.
+  void _applyStandardHours() {
+    setState(() {
+      for (var i = 0; i < 7; i++) {
+        _dayOpen[i] = true;
+        _dayOpenTime[i] = const TimeOfDay(hour: 8, minute: 0);
+        _dayCloseTime[i] = const TimeOfDay(hour: 22, minute: 0);
+      }
+    });
   }
 
   static TimeOfDay _parseTime(String value, TimeOfDay fallback) {
@@ -240,6 +252,11 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     final picked = await showTimePicker(
       context: context,
       initialTime: opening ? _dayOpenTime[dayIndex] : _dayCloseTime[dayIndex],
+      // Working hours are always 24-hour times, whatever clock format Windows is set to.
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+        child: child!,
+      ),
     );
     if (picked == null) return;
     setState(() {
@@ -251,6 +268,11 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     });
   }
 
+  static String _hhmm(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Every open day must close after it opens. No open day at all is valid: the court is
+  /// closed and simply has no bookable slots.
   bool _workingHoursValid() {
     for (var i = 0; i < 7; i++) {
       if (!_dayOpen[i]) continue;
@@ -258,7 +280,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
       final close = _dayCloseTime[i].hour * 60 + _dayCloseTime[i].minute;
       if (close <= open) return false;
     }
-    return _dayOpen.any((open) => open);
+    return true;
   }
 
   Widget _buildWorkingHours() {
@@ -271,6 +293,11 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
         Text(tr(context, 'Termini se generišu iz radnog vremena.'),
             style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
         const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: _applyStandardHours,
+          icon: const Icon(Icons.schedule, size: 18),
+          label: Text(tr(context, 'Standardno radno vrijeme (08–22, svaki dan)')),
+        ),
         for (var i = 0; i < 7; i++)
           Row(
             children: [
@@ -288,14 +315,32 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
               const SizedBox(width: 8),
               TextButton(
                 onPressed: _dayOpen[i] ? () => _pickTime(i, opening: true) : null,
-                child: Text(_dayOpenTime[i].format(context)),
+                child: Text(_hhmm(_dayOpenTime[i])),
               ),
               const Text('–'),
               TextButton(
                 onPressed: _dayOpen[i] ? () => _pickTime(i, opening: false) : null,
-                child: Text(_dayCloseTime[i].format(context)),
+                child: Text(_hhmm(_dayCloseTime[i])),
               ),
             ],
+          ),
+        // Saving a closed court is allowed; the note only makes the consequence visible.
+        if (!_dayOpen.any((open) => open))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.orange.shade800),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    tr(context, 'Teren nema radno vrijeme — neće imati slobodnih termina.'),
+                    style: TextStyle(color: Colors.orange.shade800, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
         if (_workingHoursError != null)
           Padding(
@@ -323,8 +368,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
     if (_sportId == null || _sportCenterId == null) return;
     if (!_workingHoursValid()) {
       // Shown inside the dialog: a snackbar would land behind the modal barrier.
-      setState(() => _workingHoursError =
-          "Teren mora biti otvoren barem jedan dan, a zatvaranje mora biti nakon otvaranja.");
+      setState(() => _workingHoursError = 'Vrijeme zatvaranja mora biti nakon vremena otvaranja.');
       return;
     }
     setState(() => _workingHoursError = null);
@@ -362,7 +406,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                   controller: _nameController,
                   decoration: InputDecoration(labelText: tr(context, 'Naziv')),
                   validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? tr(context, 'Unesite naziv') : null,
+                      (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite naziv') : null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
@@ -373,7 +417,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                       .map((s) => DropdownMenuItem(value: s.id, child: Text(s.name)))
                       .toList(),
                   onChanged: (v) => setState(() => _sportId = v),
-                  validator: (v) => v == null ? tr(context, 'Odaberite sport') : null,
+                  validator: (v) => v == null ? trMessage(context, 'Odaberite sport') : null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
@@ -384,7 +428,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                       .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
                       .toList(),
                   onChanged: (v) => setState(() => _sportCenterId = v),
-                  validator: (v) => v == null ? tr(context, 'Odaberite sportski centar') : null,
+                  validator: (v) => v == null ? trMessage(context, 'Odaberite sportski centar') : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -393,7 +437,7 @@ class _CourtFormDialogState extends State<CourtFormDialog> {
                   decoration: InputDecoration(labelText: tr(context, 'Cijena po satu (KM)')),
                   validator: (v) {
                     final value = double.tryParse((v ?? '').trim().replaceAll(',', '.'));
-                    if (value == null || value <= 0) return tr(context, 'Unesite ispravnu cijenu');
+                    if (value == null || value <= 0) return trMessage(context, 'Unesite ispravnu cijenu');
                     return null;
                   },
                 ),

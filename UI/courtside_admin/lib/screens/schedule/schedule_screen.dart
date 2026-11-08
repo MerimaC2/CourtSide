@@ -6,10 +6,21 @@ import '../../models/availability_block.dart';
 import '../../models/availability_slot.dart';
 import '../../models/court.dart';
 import '../../providers/availability_block_provider.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/availability_provider.dart';
 import '../../providers/court_provider.dart';
 import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
+import '../../providers/api_error.dart';
+
+/// The block a slot falls in. A block may span several slots (one set through the API, for
+/// example), so it is the block whose range contains the slot's start. Times are compared as
+/// the zero-padded `HH:mm:ss` strings the API sends, which sort in time order.
+AvailabilityBlock? blockCoveringSlot(List<AvailabilityBlock> blocks, AvailabilitySlot slot) {
+  final matches = blocks.where((b) =>
+      b.startTime.compareTo(slot.startTime) <= 0 && slot.startTime.compareTo(b.endTime) < 0);
+  return matches.isEmpty ? null : matches.first;
+}
 
 class ScheduleScreen extends StatefulWidget {
   /// Whether this is the currently selected section. The admin shell keeps every
@@ -48,7 +59,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Future<void> _loadCourts() async {
     try {
       final result =
-          await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': 200});
+          await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       setState(() {
         _courts = result.result;
@@ -58,7 +69,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (_courtId != null) _loadSchedule();
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() {
           _error = trMessage(context, message);
           _loadingCourts = false;
@@ -85,7 +96,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       });
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
@@ -99,7 +110,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Future<void> _refreshCourts() async {
     try {
       final result =
-          await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': 200});
+          await context.read<CourtProvider>().get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       final courts = result.result;
       setState(() {
@@ -131,7 +142,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Future<void> _onSlotTap(AvailabilitySlot slot) async {
     if (slot.status == 'Reserved') {
-      showSuccess(context, 'Termin je već rezervisan.');
+      // The same refusal the server gives, so the admin reads one answer however the conflict
+      // is found.
+      showError(context, 'U tom periodu već postoji rezervacija pa se ne može blokirati.');
       return;
     }
     if (slot.status == 'Blocked') {
@@ -175,21 +188,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (mounted) showSuccess(context, 'Termin je blokiran.');
       _loadSchedule();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
   Future<void> _unblock(AvailabilitySlot slot) async {
-    final matches = _blocks.where((b) => b.startTime == slot.startTime);
-    final block = matches.isEmpty ? null : matches.first;
+    final block = blockCoveringSlot(_blocks, slot);
     if (block == null) return;
+    // Removing a block always removes all of it, so the dialog names its whole range.
+    final spansMoreSlots = block.startTime != slot.startTime || block.endTime != slot.endTime;
+    final range = '${block.startTime.substring(0, 5)} - ${block.endTime.substring(0, 5)}';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${tr(ctx, 'Odblokiraj termin')} ${slot.label}'),
-        content: Text(block.reason?.isNotEmpty == true
-            ? '${tr(ctx, 'Razlog blokade')}: ${block.reason}'
-            : tr(ctx, 'Ukloniti blokadu ovog termina?')),
+        title: Text('${tr(ctx, 'Odblokiraj termin')} $range'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (spansMoreSlots) ...[
+              Text(tr(ctx, 'Blokada obuhvata više termina i bit će uklonjena u cijelosti.')),
+              const SizedBox(height: 8),
+            ],
+            Text(block.reason?.isNotEmpty == true
+                ? '${tr(ctx, 'Razlog blokade')}: ${block.reason}'
+                : tr(ctx, 'Ukloniti blokadu ovog termina?')),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(tr(ctx, 'Odustani'))),
           FilledButton(
@@ -205,7 +230,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (mounted) showSuccess(context, 'Blokada je uklonjena.');
       _loadSchedule();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
