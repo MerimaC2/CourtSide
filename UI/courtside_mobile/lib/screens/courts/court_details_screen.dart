@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../models/court_review.dart';
+import '../../models/court_working_hours.dart';
 import '../../providers/base_provider.dart';
 import '../../providers/court_provider.dart';
 import '../../providers/court_review_provider.dart';
@@ -24,12 +25,38 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
   List<CourtReview> _reviews = [];
   bool _loadingReviews = true;
 
+  /// The court as shown. The recommendation carousel passes a court built from the
+  /// recommendation itself, which carries only what the card needs, so the full record
+  /// (including working hours) is fetched here.
+  late Court _court;
+
+  /// Set once the full record has been fetched, so a court that is genuinely closed (no hours)
+  /// is shown as such instead of being refetched on every visit.
+  bool _courtLoaded = false;
+
   @override
   void initState() {
     super.initState();
+    _court = widget.court;
+    _courtLoaded = _court.workingHours.isNotEmpty;
     // Implicit signal for the recommender; failure here shouldn't block the screen.
     context.read<CourtProvider>().logView(widget.court.id).catchError((_) {});
+    if (!_courtLoaded) _loadCourt();
     _loadReviews();
+  }
+
+  Future<void> _loadCourt() async {
+    try {
+      final full = await context.read<CourtProvider>().getById(widget.court.id);
+      if (mounted) {
+        setState(() {
+          _court = full;
+          _courtLoaded = true;
+        });
+      }
+    } catch (_) {
+      // The details already on screen stay usable; only the schedule is missing.
+    }
   }
 
   Future<void> _loadReviews() async {
@@ -48,9 +75,23 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
     }
   }
 
+  /// Sport center followed by its address and city, e.g. `Sportski centar X · Adresa 1, Sarajevo`.
+  /// The city is left out when the address already ends with it.
+  static String _location(Court court) {
+    final address = court.sportCenterAddress?.trim() ?? '';
+    final city = court.cityName?.trim() ?? '';
+    final cityInAddress =
+        city.isNotEmpty && address.toLowerCase().endsWith(city.toLowerCase());
+    final place = [address, if (!cityInAddress) city]
+        .where((e) => e.isNotEmpty)
+        .join(', ');
+    return [court.sportCenterName, place].where((e) => e != null && e.isNotEmpty).join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final court = widget.court;
+    final court = _court;
+    final location = _location(court);
     return Scaffold(
       appBar: AppBar(
         title: Text(court.name),
@@ -102,14 +143,14 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
             ],
             const SizedBox(height: 16),
             _infoRow(Icons.payments_outlined, 'Cijena po satu', formatPrice(court.pricePerHour)),
-            if (court.sportCenterName != null && court.sportCenterName!.isNotEmpty)
-              _infoRow(Icons.location_on_outlined, 'Lokacija', court.sportCenterName!),
+            if (location.isNotEmpty) _infoRow(Icons.location_on_outlined, 'Lokacija', location),
             _infoRow(
               Icons.circle,
               'Status',
               tr(context, court.isActive ? 'Aktivan' : 'Neaktivan'),
               iconColor: court.isActive ? kPrimaryColor : Colors.grey,
             ),
+            _buildWorkingHours(),
             if (court.description != null && court.description!.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text(tr(context, 'Opis'),
@@ -133,6 +174,63 @@ class _CourtDetailsScreenState extends State<CourtDetailsScreen> {
             _buildReviews(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Days the court is open, Monday first. Slots are generated from these hours, so a day
+  /// with no entry has nothing to book — it is listed as closed rather than left out, so the
+  /// week reads as a schedule instead of a list with gaps.
+  static const _weekdays = [
+    ('Monday', 'Ponedjeljak'),
+    ('Tuesday', 'Utorak'),
+    ('Wednesday', 'Srijeda'),
+    ('Thursday', 'Četvrtak'),
+    ('Friday', 'Petak'),
+    ('Saturday', 'Subota'),
+    ('Sunday', 'Nedjelja'),
+  ];
+
+  Widget _buildWorkingHours() {
+    final hours = _court.workingHours;
+    // Nothing is known yet while the full record is still loading; once it is, an empty
+    // schedule is real information — the court is closed every day — and is shown as such.
+    if (hours.isEmpty && !_courtLoaded) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 16),
+        Text(tr(context, 'Radno vrijeme'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        for (final (apiDay, label) in _weekdays)
+          _workingHoursRow(label, hours.where((h) => h.dayOfWeek == apiDay).toList()),
+      ],
+    );
+  }
+
+  /// `08:00:00` -> `08:00`. Splits on the separator and pads both parts, so an unpadded hour
+  /// such as `8:00:00` also becomes `08:00`.
+  static String _hourAndMinute(String time) {
+    final parts = time.split(':');
+    if (parts.length < 2) return time;
+    return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+  }
+
+  Widget _workingHoursRow(String label, List<CourtWorkingHours> forDay) {
+    final day = forDay.isEmpty ? null : forDay.first;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(tr(context, label), style: TextStyle(color: Colors.grey.shade700)),
+          day == null
+              ? Text(tr(context, 'Zatvoreno'), style: TextStyle(color: Colors.grey.shade500))
+              : Text('${_hourAndMinute(day.openTime)} - ${_hourAndMinute(day.closeTime)}',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'court_working_hours.dart';
+
 class Court {
   final int id;
   final String name;
@@ -6,11 +8,14 @@ class Court {
   final String? sportName;
   final int sportCenterId;
   final String? sportCenterName;
+  final String? sportCenterAddress;
+  final String? cityName;
   final double pricePerHour;
   final bool isActive;
   final int? primaryImageId;
   final double? averageRating;
   final int reviewCount;
+  final List<CourtWorkingHours> workingHours;
 
   Court({
     required this.id,
@@ -20,11 +25,14 @@ class Court {
     this.sportName,
     required this.sportCenterId,
     this.sportCenterName,
+    this.sportCenterAddress,
+    this.cityName,
     required this.pricePerHour,
     required this.isActive,
     this.primaryImageId,
     this.averageRating,
     this.reviewCount = 0,
+    this.workingHours = const [],
   });
 
   factory Court.fromJson(Map<String, dynamic> json) => Court(
@@ -35,10 +43,15 @@ class Court {
         sportName: json['sportName'] as String?,
         sportCenterId: json['sportCenterId'] as int? ?? 0,
         sportCenterName: json['sportCenterName'] as String?,
+        sportCenterAddress: json['sportCenterAddress'] as String?,
+        cityName: json['cityName'] as String?,
         pricePerHour: (json['pricePerHour'] as num?)?.toDouble() ?? 0,
         isActive: json['isActive'] as bool? ?? false,
         primaryImageId: json['primaryImageId'] as int?,
         averageRating: (json['averageRating'] as num?)?.toDouble(),
         reviewCount: json['reviewCount'] as int? ?? 0,
+        workingHours: ((json['workingHours'] as List?) ?? const [])
+            .map((e) => CourtWorkingHours.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
