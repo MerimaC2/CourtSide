@@ -7,6 +7,7 @@ import '../../providers/base_provider.dart';
 import '../../providers/news_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../providers/api_error.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -33,12 +34,12 @@ class _NewsScreenState extends State<NewsScreen> {
     });
     try {
       final result =
-          await context.read<NewsProvider>().get(filter: {'page': 1, 'pageSize': 100});
+          await context.read<NewsProvider>().get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       setState(() => _items = result.result);
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {

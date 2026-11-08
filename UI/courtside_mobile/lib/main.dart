@@ -59,6 +59,7 @@ class CourtSideApp extends StatelessWidget {
       title: 'CourtSide',
       debugShowCheckedModeBanner: false,
       navigatorKey: appNavigatorKey,
+      navigatorObservers: [ErrorSnackBarObserver()],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: kPrimaryColor),
         useMaterial3: true,
@@ -67,6 +68,7 @@ class CourtSideApp extends StatelessWidget {
           fillColor: Colors.grey.shade50,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          errorMaxLines: 3,
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(

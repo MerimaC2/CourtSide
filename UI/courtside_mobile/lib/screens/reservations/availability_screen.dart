@@ -7,6 +7,7 @@ import '../../models/court.dart';
 import '../../providers/availability_provider.dart';
 import '../../utils/util.dart';
 import 'booking_form_screen.dart';
+import '../../providers/api_error.dart';
 
 class AvailabilityScreen extends StatefulWidget {
   final Court court;
@@ -41,7 +42,7 @@ class _AvailabilityScreenState extends State<AvailabilityScreen> {
       setState(() => _slots = slots);
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {

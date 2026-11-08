@@ -16,6 +16,10 @@ import '../utils/authorization.dart';
 abstract class BaseProvider<T> with ChangeNotifier {
   static String get baseUrl => AppConfig.apiBase;
 
+  /// The largest page the API will serve; it clamps anything bigger, so asking for more
+  /// silently drops records. Used where a whole set is needed at once.
+  static const int maxPageSize = 100;
+
   final String endpoint;
   late final IOClient http;
 
