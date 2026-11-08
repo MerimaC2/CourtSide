@@ -56,23 +56,35 @@ class AuthProvider with ChangeNotifier {
 
   /// Tells the API to invalidate this token, then clears it locally. A failure here
   /// must not trap the user in the app, so the local session is cleared either way.
-  Future<void> signOut() async {
+  /// Returns whether the server confirmed the sign-out (trivially so when there was no
+  /// token), so the caller can tell the user when the token may still be valid there.
+  Future<bool> signOut() async {
     final token = Authorization.token;
+    var confirmed = true;
     if (token != null && token.isNotEmpty) {
       try {
-        await _http
+        final response = await _http
             .post(
               Uri.parse('${_baseUrl}auth/logout'),
               headers: {'Authorization': 'Bearer $token'},
             )
             .timeout(_logoutTimeout);
+        // The client does not throw on an HTTP error, so a refusal has to be checked here.
+        // 401 means the server already rejects this token (expired or revoked), which is
+        // exactly what signing out is meant to achieve.
+        if (response.statusCode >= 300 && response.statusCode != 401) {
+          debugPrint('Odjava na serveru odbijena: HTTP ${response.statusCode}');
+          confirmed = false;
+        }
       } catch (e) {
         // Offline, unreachable or too slow — the local sign-out below still applies,
         // but the token stays valid on the server until it expires.
         debugPrint('Odjava na serveru nije uspjela: $e');
+        confirmed = false;
       }
     }
     Authorization.clear();
     notifyListeners();
+    return confirmed;
   }
 }

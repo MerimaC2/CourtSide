@@ -8,6 +8,42 @@ import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
+import '../../providers/api_error.dart';
+
+/// How a refund outcome is presented to the administrator.
+enum RefundNoticeKind { success, info, error }
+
+/// What to tell the administrator once a refund was asked for, chosen from the state the server
+/// reports back: the money is returned, the payment provider still has to settle it, staff still
+/// have to hand it back, or the attempt failed. [detail] is the server's failure reason, kept
+/// apart from [message] so each is translated on its own. Returns null when the payment shows
+/// no refund under way.
+({RefundNoticeKind kind, String message, String? detail})? refundNoticeFor(Payment? payment) {
+  if (payment == null) return null;
+  // A manual refund (cash, or a card payment with no processor reference) is decided by the
+  // server; a cash payment can still carry the id of an abandoned card attempt.
+  final manual = payment.canConfirmCashRefund || payment.method == 'Cash';
+  final online = !manual && payment.stripePaymentIntentId?.isNotEmpty == true;
+  return switch (payment.status) {
+    'Refunded' => (kind: RefundNoticeKind.success, message: 'Povrat je izvršen.', detail: null),
+    'RefundPending' when manual => (
+        kind: RefundNoticeKind.info,
+        message: 'Povrat je odobren — potvrdite ga kada novac bude vraćen klijentu.',
+        detail: null,
+      ),
+    'RefundPending' when online => (
+        kind: RefundNoticeKind.info,
+        message: 'Povrat je pokrenut kod platnog provajdera — status će se ažurirati kada ga potvrdi.',
+        detail: null,
+      ),
+    'RefundFailed' => (
+        kind: RefundNoticeKind.error,
+        message: 'Povrat nije uspio',
+        detail: payment.refundFailureReason,
+      ),
+    _ => null,
+  };
+}
 
 /// Shows full reservation details with admin actions (confirm/cancel).
 /// Pops with `true` if the reservation was changed, so the caller can refresh its list.
@@ -76,7 +112,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
       setState(() => _payment = payment);
       showSuccess(context, 'Uplata gotovinom je evidentirana.');
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -90,29 +126,52 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
       final payment = await context.read<PaymentProvider>().refund(_reservation.id);
       if (!mounted) return;
       if (payment != null) setState(() => _payment = payment);
-      // Cash is only owed at this point; the card refund is already settled with the processor.
-      showSuccess(context,
-          payment?.status == 'RefundPending'
-              ? 'Povrat je odobren — potvrdite ga kada gotovina bude vraćena.'
-              : 'Povrat je izvršen.');
+      _showRefundNotice(payment);
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  /// Reports a refund outcome in the style that matches it, so a refund that is only under
+  /// way or has failed never reads as done.
+  void _showRefundNotice(Payment? payment) {
+    final notice = refundNoticeFor(payment);
+    if (notice == null) return;
+    switch (notice.kind) {
+      case RefundNoticeKind.success:
+        showSuccess(context, notice.message);
+      case RefundNoticeKind.info:
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(trMessage(context, notice.message))));
+      case RefundNoticeKind.error:
+        final detail = notice.detail;
+        showError(
+            context,
+            detail == null || detail.isEmpty
+                ? '${trMessage(context, notice.message)}.'
+                : '${trMessage(context, notice.message)}: ${trMessage(context, detail)}');
+    }
+  }
+
   Future<void> _confirmCashRefund() async {
-    if (!await _confirmAction('Da li je gotovina fizički vraćena klijentu?')) return;
+    // A card payment with no processor reference is refunded by hand as well, so the wording
+    // follows the payment method.
+    final cash = _payment?.method == 'Cash';
+    if (!await _confirmAction(
+        cash ? 'Da li je gotovina fizički vraćena klijentu?' : 'Da li je novac vraćen klijentu?')) {
+      return;
+    }
     if (!mounted) return;
     setState(() => _busy = true);
     try {
       final payment = await context.read<PaymentProvider>().confirmCashRefund(_reservation.id);
       if (!mounted) return;
       setState(() => _payment = payment);
-      showSuccess(context, 'Povrat gotovine je potvrđen.');
+      showSuccess(context, cash ? 'Povrat gotovine je potvrđen.' : 'Ručni povrat je potvrđen.');
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -125,8 +184,11 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
       if (!mounted) return;
       setState(() => _reservation = updated);
       showSuccess(context, 'Rezervacija je potvrđena.');
+      // Which payment actions are allowed depends on the reservation status, so the
+      // payment section is refreshed rather than left showing the previous options.
+      await _loadPayment();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -154,14 +216,20 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
     );
     if (reason == null || reason.isEmpty) return;
     if (!mounted) return;
+    final paymentStatusBefore = _payment?.status;
     setState(() => _busy = true);
     try {
       final updated = await context.read<ReservationProvider>().cancel(_reservation.id, reason);
       if (!mounted) return;
       setState(() => _reservation = updated);
       showSuccess(context, 'Rezervacija je otkazana.');
+      // Cancelling may have started a refund; the payment section must show that state, and
+      // its outcome is reported the same way as a refund started by hand.
+      await _loadPayment();
+      if (!mounted) return;
+      if (_payment?.status != paymentStatusBefore) _showRefundNotice(_payment);
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -203,11 +271,13 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
               _row(context, 'Iznos', formatPrice(r.totalPrice)),
               _row(context, 'Način plaćanja',
                   r.paymentMethod != null ? translatePaymentMethod(context, r.paymentMethod!) : '-'),
-              _row(context, 'Status plaćanja',
-                  r.paymentStatus != null ? translatePaymentStatus(context, r.paymentStatus!) : '-'),
+              _row(context, 'Status plaćanja', switch (_payment?.status ?? r.paymentStatus) {
+                final String status => translatePaymentStatus(context, status),
+                null => '-',
+              }),
               if (r.note != null && r.note!.isNotEmpty) _row(context, 'Napomena', r.note!),
               if (r.cancellationReason != null && r.cancellationReason!.isNotEmpty)
-                _row(context, 'Razlog otkazivanja', r.cancellationReason!),
+                _row(context, 'Razlog otkazivanja', trMessage(context, r.cancellationReason!)),
               const Divider(height: 24),
               _buildPaymentSection(),
             ],
@@ -239,7 +309,8 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
           if (_payment?.canConfirmCashRefund == true)
             FilledButton(
               onPressed: _confirmCashRefund,
-              child: Text(tr(context, 'Potvrdi povrat gotovine')),
+              child: Text(tr(context,
+                  _payment!.method == 'Cash' ? 'Potvrdi povrat gotovine' : 'Potvrdi ručni povrat')),
             ),
           if ((_payment?.canCollectCash == true ||
                   _payment?.canRefund == true ||
@@ -256,7 +327,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
             Tooltip(
               message: r.canConfirm
                   ? ''
-                  : tr(context, 'Termin je već počeo — potvrda više nije moguća.'),
+                  : tr(context, 'Potvrda više nije moguća — termin je već počeo ili je teren deaktiviran.'),
               child: FilledButton(
                 onPressed: r.canConfirm ? _confirm : null,
                 child: Text(tr(context, 'Potvrdi')),
@@ -312,7 +383,7 @@ class _ReservationDetailDialogState extends State<ReservationDetailDialog> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '${tr(context, 'Razlog neuspjeha')}: ${payment.refundFailureReason}',
+                    '${tr(context, 'Razlog neuspjeha')}: ${tr(context, payment.refundFailureReason!)}',
                     style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
                   ),
                 ),

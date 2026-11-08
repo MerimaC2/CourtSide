@@ -34,12 +34,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       ];
 
   Future<void> _logout() async {
-    await context.read<AuthProvider>().signOut();
+    final confirmed = await context.read<AuthProvider>().signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreen()),
       (_) => false,
     );
+    // The app-wide messenger carries the message over to the login screen.
+    if (!confirmed) {
+      showError(context, 'Odjava na serveru nije potvrđena — lokalna sesija je završena.');
+    }
   }
 
   @override
