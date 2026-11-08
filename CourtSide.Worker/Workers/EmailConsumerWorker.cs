@@ -97,8 +97,21 @@ public class EmailConsumerWorker : BackgroundService
             catch (Exception ex)
             {
                 // The consumer callback is the outermost frame here — an escaping exception would
-                // leave the delivery in limbo, so it is logged rather than thrown.
+                // leave the delivery in limbo, so it is logged rather than thrown. The delivery is
+                // handed back to the queue for one more attempt only: a delivery that fails again
+                // after being redelivered is dropped, so a message that can never be processed is
+                // not cycled through the queue forever. If even the nack fails the channel is gone
+                // and the broker redelivers on reconnect.
                 _logger.LogError(ex, "Neočekivana greška pri obradi poruke iz reda '{Queue}'.", _rabbit.Queue);
+                var requeue = !ea.Redelivered;
+                if (!requeue)
+                    _logger.LogError("Poruka iz reda '{Queue}' nije obrađena ni nakon ponovne isporuke i odbacuje se: {Payload}",
+                        _rabbit.Queue, Excerpt(ea));
+                try { _channel?.BasicNack(ea.DeliveryTag, multiple: false, requeue: requeue); }
+                catch (Exception nackEx)
+                {
+                    _logger.LogError(nackEx, "Poruku nije bilo moguće vratiti u red '{Queue}'.", _rabbit.Queue);
+                }
             }
         };
 
