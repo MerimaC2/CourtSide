@@ -24,7 +24,14 @@ class Reservation {
   /// Decided by the server, which owns the venue's time zone and the cancellation rule.
   /// Computing it from device time would disagree with what the API actually enforces.
   final bool canCancel;
+
+  /// Set by the server when this card-paid reservation is still active and unpaid, so a
+  /// payment can be started (again) from the reservations list.
+  final bool canPayOnline;
   final DateTime? startsAt;
+
+  /// As the venue's clock reads it: the date and time the server wrote, without converting
+  /// to the device's zone, so it lines up with [startTime] wherever the device is.
   final DateTime? cancelDeadlineAt;
 
   Reservation({
@@ -50,6 +57,7 @@ class Reservation {
     required this.isPaid,
     required this.hasReview,
     required this.canCancel,
+    this.canPayOnline = false,
     this.startsAt,
     this.cancelDeadlineAt,
   });
@@ -77,11 +85,27 @@ class Reservation {
         isPaid: json['isPaid'] as bool? ?? false,
         hasReview: json['hasReview'] as bool? ?? false,
         canCancel: json['canCancel'] as bool? ?? false,
+        canPayOnline: json['canPayOnline'] as bool? ?? false,
         startsAt: DateTime.tryParse(json['startsAt'] as String? ?? '')?.toLocal(),
-        cancelDeadlineAt: DateTime.tryParse(json['cancelDeadlineAt'] as String? ?? '')?.toLocal(),
+        cancelDeadlineAt: _wallClock(json['cancelDeadlineAt'] as String?),
       );
 
   bool get isActive => status == 'Pending' || status == 'Confirmed';
 
   String get timeRange => '${startTime.substring(0, 5)} - ${endTime.substring(0, 5)}';
+
+  /// Orders by when the slot starts: date, then start time. Both are zero-padded
+  /// (`yyyy-MM-dd`, `HH:mm:ss`), so comparing the text gives chronological order.
+  int compareStart(Reservation other) {
+    final byDate = date.compareTo(other.date);
+    return byDate != 0 ? byDate : startTime.compareTo(other.startTime);
+  }
+}
+
+/// Date and time part of an ISO timestamp; the UTC offset after it is left out.
+final _wallClockPattern = RegExp(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?');
+
+DateTime? _wallClock(String? value) {
+  final match = _wallClockPattern.firstMatch(value ?? '');
+  return match == null ? null : DateTime.tryParse(match.group(0)!);
 }

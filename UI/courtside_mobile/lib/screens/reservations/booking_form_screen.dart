@@ -13,6 +13,7 @@ import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../../utils/validators.dart';
 import 'booking_confirmation_screen.dart';
+import '../../providers/api_error.dart';
 
 class BookingFormScreen extends StatefulWidget {
   final Court court;
@@ -92,8 +93,10 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
     if (confirmed != true || !mounted) return;
 
     setState(() => _submitting = true);
+    final payments = context.read<PaymentProvider>();
+    Reservation? reservation;
     try {
-      final reservation = await context.read<ReservationProvider>().create(
+      reservation = await context.read<ReservationProvider>().create(
             courtId: widget.court.id,
             date: widget.date,
             startTime: widget.slot.startTime,
@@ -109,45 +112,46 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
         return;
       }
 
-      final payment = await _payWithStripe(reservation.id);
+      final payment = await payments.payWithStripe(reservation.id);
       _goToConfirmation(reservation, payment: payment);
+    } on PaymentVerificationFailed catch (e) {
+      // The sheet closed normally, so the card may well have been charged; only the check
+      // with the server failed. Leaving the user on the form would invite a second booking,
+      // so they are taken to the confirmation with the payment shown as still in progress.
+      // An expired session has already sent the user to the login screen; say why, nothing more.
+      if (!Authorization.isLoggedIn) {
+        if (mounted) showError(context, 'Sesija je istekla. Prijavite se ponovo.');
+        return;
+      }
+      _goToConfirmation(reservation!, onlinePending: true);
+      // Shown once the confirmation is on top, since an error is closed when its screen is left.
+      if (mounted) showError(context, e.message);
     } on StripeException catch (e) {
       if (mounted) {
-        final detail = e.error.localizedMessage ?? e.error.code;
+        // Closing the sheet is the user's own choice; Stripe's (English) note about it adds nothing.
+        final detail = e.error.code == FailureCode.Canceled
+            ? ''
+            : ' (${e.error.localizedMessage ?? e.error.code})';
         showError(context,
-            '${trMessage(context, 'Plaćanje nije završeno')} ($detail). ${trMessage(context, 'Rezervacija je kreirana kao neplaćena.')}');
+            '${trMessage(context, 'Plaćanje nije završeno')}$detail. ${trMessage(context, 'Rezervacija je kreirana kao neplaćena.')}');
       }
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
-  /// Returns what the server says about the payment. The sheet closing is only the client's
-  /// view of things; with automatic payment methods the charge can still be in flight, so the
-  /// confirmation screen must show the verified status rather than assume success.
-  Future<Payment> _payWithStripe(int reservationId) async {
-    final payments = context.read<PaymentProvider>();
-    final intent = await payments.createIntent(reservationId);
-    Stripe.publishableKey = intent.publishableKey;
-    await Stripe.instance.applySettings();
-    await Stripe.instance.initPaymentSheet(
-      paymentSheetParameters: SetupPaymentSheetParameters(
-        paymentIntentClientSecret: intent.clientSecret,
-        merchantDisplayName: 'CourtSide',
-      ),
-    );
-    await Stripe.instance.presentPaymentSheet();
-    return payments.verify(reservationId);
-  }
-
   /// [payment] is null for cash, where nothing is collected up front.
-  void _goToConfirmation(Reservation reservation, {Payment? payment}) {
+  void _goToConfirmation(Reservation reservation, {Payment? payment, bool onlinePending = false}) {
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => BookingConfirmationScreen(reservation: reservation, payment: payment),
+        builder: (_) => BookingConfirmationScreen(
+          reservation: reservation,
+          payment: payment,
+          onlinePending: onlinePending,
+        ),
       ),
     );
   }
@@ -180,7 +184,7 @@ class _BookingFormScreenState extends State<BookingFormScreen> {
                   prefixIcon: const Icon(Icons.person_outline),
                 ),
                 validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? tr(context, 'Unesite ime i prezime') : null,
+                    (v == null || v.trim().isEmpty) ? trMessage(context, 'Unesite ime i prezime') : null,
               ),
               const SizedBox(height: 12),
               TextFormField(

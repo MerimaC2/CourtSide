@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' show FailureCode, StripeException;
 import 'package:provider/provider.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/court_review_provider.dart';
+import '../../providers/payment_provider.dart';
 import '../../providers/reservation_provider.dart';
+import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../../widgets/dialog_header.dart';
+import '../../providers/api_error.dart';
 
 class MyReservationsScreen extends StatefulWidget {
   const MyReservationsScreen({super.key});
@@ -21,6 +26,10 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
   List<Reservation> _reservations = [];
   bool _loading = true;
   String? _error;
+
+  /// The reservation whose card payment is under way, so a second payment cannot be started
+  /// while the payment sheet is open.
+  int? _payingId;
 
   @override
   void initState() {
@@ -43,12 +52,12 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
     try {
       final result = await context
           .read<ReservationProvider>()
-          .getMine(filter: {'page': 1, 'pageSize': 200});
+          .getMine(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       setState(() => _reservations = result.result);
     } catch (e) {
       if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
@@ -58,13 +67,13 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
 
   List<Reservation> get _active {
     final list = _reservations.where((r) => r.isActive).toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+      ..sort((a, b) => a.compareStart(b));
     return list;
   }
 
   List<Reservation> get _history {
     final list = _reservations.where((r) => !r.isActive).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+      ..sort((a, b) => b.compareStart(a));
     return list;
   }
 
@@ -96,7 +105,64 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
       showSuccess(context, 'Rezervacija je otkazana.');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
+    }
+  }
+
+  /// Same card flow as the booking form. The outcome shown is what the server verified, so
+  /// the reservation is reported as paid only once its payment is completed.
+  Future<void> _payByCard(Reservation reservation) async {
+    setState(() => _payingId = reservation.id);
+    try {
+      final payment = await context.read<PaymentProvider>().payWithStripe(reservation.id);
+      if (!mounted) return;
+      if (payment.isPaid) {
+        showSuccess(context, 'Plaćeno online');
+      } else if (payment.isFailed) {
+        showError(context, 'Plaćanje nije uspjelo — rezervacija je neplaćena');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${trMessage(context, 'Plaćanje je u obradi')}. '
+                '${trMessage(context, 'Konačan status plaćanja vidjet ćete u Mojim rezervacijama.')}'),
+          ),
+        );
+      }
+    } on PaymentVerificationFailed catch (e) {
+      // The sheet closed normally, so the card may have been charged; only the check with
+      // the server failed, which leaves the outcome unknown rather than failed.
+      if (!mounted) return;
+      // An expired session has already sent the user to the login screen.
+      if (!Authorization.isLoggedIn) {
+        showError(context, 'Sesija je istekla. Prijavite se ponovo.');
+        return;
+      }
+      showError(context, '${trMessage(context, 'Plaćanje je u obradi')}: ${trMessage(context, e.message)}');
+    } on StripeException catch (e) {
+      if (mounted) {
+        // Closing the sheet is the user's own choice; Stripe's (English) note about it adds nothing.
+        final detail = e.error.code == FailureCode.Canceled
+            ? ''
+            : ' (${e.error.localizedMessage ?? e.error.code})';
+        showError(context,
+            '${trMessage(context, 'Plaćanje nije završeno')}$detail. ${trMessage(context, 'Rezervacija je i dalje neplaćena.')}');
+      }
+    } catch (e) {
+      final message = describeError(e);
+      if (mounted) {
+        // Preparing a new payment found the earlier card payment already collected and recorded it.
+        if (message == 'Rezervacija je već plaćena.') {
+          showSuccess(context, 'Plaćeno online');
+        } else {
+          showError(context, message);
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _payingId = null);
+        // An expired session has already sent the user to the login screen.
+        if (Authorization.isLoggedIn) _load();
+      }
     }
   }
 
@@ -158,7 +224,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
       showSuccess(context, 'Hvala na ocjeni!');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -172,6 +238,8 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: [Tab(text: tr(context, 'Aktivne')), Tab(text: tr(context, 'Historija'))],
         ),
       ),
@@ -263,8 +331,33 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
               ],
             ),
             const SizedBox(height: 6),
-            Text(formatPrice(r.totalPrice),
-                style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimaryColor)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(formatPrice(r.totalPrice),
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: kPrimaryColor)),
+                ),
+                if (r.paymentStatus != null) _paymentBadge(context, r.paymentStatus!),
+              ],
+            ),
+            if (r.isActive && r.canPayOnline) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _payingId == r.id
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: SizedBox(
+                            width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      )
+                    : TextButton.icon(
+                        onPressed: _payingId == null ? () => _payByCard(r) : null,
+                        icon: const Icon(Icons.credit_card, size: 18, color: kPrimaryColor),
+                        label: Text(tr(context, 'Plati karticom'),
+                            style: const TextStyle(color: kPrimaryColor)),
+                      ),
+              ),
+            ],
             if (canCancelSection) ...[
               const SizedBox(height: 8),
               Align(
@@ -276,7 +369,7 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
                         label: Text(tr(context, 'Otkaži'), style: const TextStyle(color: Colors.red)),
                       )
                     : Text(
-                        tr(context, 'Otkazivanje nije moguće manje od 24h prije termina.'),
+                        _cancelClosedText(context, r),
                         style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                       ),
               ),
@@ -295,6 +388,34 @@ class _MyReservationsScreenState extends State<MyReservationsScreen>
           ],
         ),
       ),
+    );
+  }
+
+  /// Why the booking can no longer be cancelled. The server decides the rule; the deadline it
+  /// sends is shown as an exact moment, with the general 24h rule as the fallback.
+  String _cancelClosedText(BuildContext context, Reservation r) {
+    final deadline = r.cancelDeadlineAt;
+    if (deadline == null) return tr(context, 'Otkazivanje nije moguće manje od 24h prije termina.');
+    return '${tr(context, 'Otkazivanje je bilo moguće do')} ${formatDisplayDateTime(deadline)}.';
+  }
+
+  /// The state of the money, shown next to the price so an online payment that is still in
+  /// progress or was refunded is visible without opening anything.
+  Widget _paymentBadge(BuildContext context, String status) {
+    final Color color = switch (status) {
+      'Completed' => kPrimaryColor,
+      'Failed' || 'RefundFailed' => Colors.red,
+      'Refunded' => Colors.blueGrey,
+      _ => Colors.orange,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(translatePaymentStatus(context, status),
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 

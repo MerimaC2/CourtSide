@@ -11,11 +11,23 @@ class BookingConfirmationScreen extends StatelessWidget {
   /// What the server verified about the card payment; null when paying cash on arrival.
   final Payment? payment;
 
-  const BookingConfirmationScreen({super.key, required this.reservation, this.payment});
+  /// A card payment was attempted but its result could not be fetched yet, so the payment is
+  /// shown as being processed.
+  final bool onlinePending;
+
+  const BookingConfirmationScreen({
+    super.key,
+    required this.reservation,
+    this.payment,
+    this.onlinePending = false,
+  });
+
+  bool get _inProgress => onlinePending || (payment != null && payment!.isProcessing);
 
   /// Only a payment the server confirmed as completed may be shown as paid — closing the
   /// payment sheet is not proof that the card was charged.
   String get _paymentLabel {
+    if (onlinePending) return 'Plaćanje je u obradi';
     if (payment == null) return 'Plaćanje pri dolasku (gotovina)';
     if (payment!.isPaid) return 'Plaćeno online';
     if (payment!.isFailed) return 'Plaćanje nije uspjelo — rezervacija je neplaćena';
@@ -64,7 +76,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                 ),
               ),
             ),
-            if (payment != null && payment!.isProcessing) ...[
+            if (_inProgress) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
