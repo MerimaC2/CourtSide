@@ -6,6 +6,7 @@ import 'package:http/io_client.dart';
 import '../config/app_config.dart';
 import '../utils/authorization.dart';
 import '../utils/util.dart';
+import 'api_error.dart';
 
 /// Downloads the admin PDF report. Not a [BaseProvider] subclass — the response
 /// body is binary (application/pdf), not JSON.
@@ -59,7 +60,9 @@ class ReportProvider {
     }
     final response = await _http.get(uri, headers: headers);
     if (response.statusCode >= 300) {
-      throw Exception('Greška pri generisanju izvještaja (HTTP ${response.statusCode}).');
+      // The server explains a refused period (e.g. "od" after "do"); that sentence is what
+      // the administrator needs to see, not the status code.
+      throw Exception(errorMessageFrom(response));
     }
     return response.bodyBytes;
   }

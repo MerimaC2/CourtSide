@@ -11,8 +11,10 @@ import '../../providers/sport_center_provider.dart';
 import '../../providers/sport_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../widgets/pager.dart';
 import 'court_form_dialog.dart';
 import 'court_reviews_dialog.dart';
+import '../../providers/api_error.dart';
 
 class CourtsScreen extends StatefulWidget {
   /// Whether this is the currently selected section. The admin shell keeps every
@@ -33,6 +35,12 @@ class _CourtsScreenState extends State<CourtsScreen> {
   List<SportCenter> _sportCenters = [];
   bool _loading = true;
   String? _error;
+  int _page = 1;
+  int _totalCount = 0;
+
+  /// Identifies the newest load. Two loads can overlap (a pager click while a search is
+  /// still running); only the newest answer is applied, so the rows always match the pager.
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -43,7 +51,31 @@ class _CourtsScreenState extends State<CourtsScreen> {
   @override
   void didUpdateWidget(covariant CourtsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _load();
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadLookups();
+      _load();
+    }
+  }
+
+  /// The values behind the form's dropdowns. They are not paged and change rarely, so they
+  /// are fetched when the section opens rather than on every page turn; a failure here only
+  /// leaves the form unavailable instead of replacing the list with an error.
+  Future<void> _loadLookups() async {
+    final sportProvider = context.read<SportProvider>();
+    final sportCenterProvider = context.read<SportCenterProvider>();
+    try {
+      final sports =
+          await sportProvider.get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
+      final sportCenters = await sportCenterProvider
+          .get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
+      if (!mounted) return;
+      setState(() {
+        _sports = sports.result;
+        _sportCenters = sportCenters.result;
+      });
+    } catch (_) {
+      // Leaves the dropdowns empty, which already disables the "add" button with a tooltip.
+    }
   }
 
   @override
@@ -52,37 +84,47 @@ class _CourtsScreenState extends State<CourtsScreen> {
     super.dispose();
   }
 
+  /// A new search is a different result set, so paging starts over.
+  Future<void> _resetAndLoad() {
+    _page = 1;
+    return _load();
+  }
+
   Future<void> _load() async {
+    final token = ++_loadToken;
+    // A retry after the API was unreachable must bring the dropdown data back as well,
+    // otherwise the list recovers while the form stays disabled.
+    if (_sports.isEmpty || _sportCenters.isEmpty) _loadLookups();
     setState(() {
       _loading = true;
       _error = null;
     });
-    final sportProvider = context.read<SportProvider>();
-    final sportCenterProvider = context.read<SportCenterProvider>();
     final courtProvider = context.read<CourtProvider>();
     try {
-      final sports = await sportProvider.get(filter: {'page': 1, 'pageSize': 100});
-      final sportCenters = await sportCenterProvider.get(filter: {'page': 1, 'pageSize': 100});
       final filter = <String, dynamic>{
-        'page': 1,
-        'pageSize': 200,
+        'page': _page,
+        'pageSize': Pager.pageSize,
         if (_searchController.text.trim().isNotEmpty)
           'searchTerm': _searchController.text.trim(),
       };
       final courts = await courtProvider.get(filter: filter);
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
+      if (courts.result.isEmpty && _page > 1) {
+        // The last record on this page was deleted; fall back to the first page.
+        _page = 1;
+        return await _load();
+      }
       setState(() {
-        _sports = sports.result;
-        _sportCenters = sportCenters.result;
         _courts = courts.result;
+        _totalCount = courts.count;
       });
     } catch (e) {
-      if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted && token == _loadToken) {
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && token == _loadToken) setState(() => _loading = false);
     }
   }
 
@@ -118,9 +160,11 @@ class _CourtsScreenState extends State<CourtsScreen> {
       if (mounted) {
         showSuccess(context, court == null ? 'Teren je dodan.' : 'Teren je ažuriran.');
       }
-      _load();
+      // Lists are newest first, so after adding a record the list returns to the first page,
+      // where the new record appears; an edit reloads the current page.
+      court == null ? _resetAndLoad() : _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -147,7 +191,7 @@ class _CourtsScreenState extends State<CourtsScreen> {
       if (mounted) showSuccess(context, 'Teren je obrisan.');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -168,10 +212,10 @@ class _CourtsScreenState extends State<CourtsScreen> {
                     prefixIcon: const Icon(Icons.search),
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.arrow_forward),
-                      onPressed: _load,
+                      onPressed: _resetAndLoad,
                     ),
                   ),
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _resetAndLoad(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -190,6 +234,15 @@ class _CourtsScreenState extends State<CourtsScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
+          if (_error == null && _totalCount > 0)
+            Pager(
+              page: _page,
+              totalCount: _totalCount,
+              onPageChanged: (page) {
+                setState(() => _page = page);
+                _load();
+              },
+            ),
         ],
       ),
     );

@@ -25,8 +25,6 @@ class NewsProvider extends BaseProvider<News> {
     ));
     final streamed = await http.send(request);
     final response = await Response.fromStream(streamed);
-    if (response.statusCode >= 300) {
-      throw Exception(response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}');
-    }
+    isValidResponse(response);
   }
 }

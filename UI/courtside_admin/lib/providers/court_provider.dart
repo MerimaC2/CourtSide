@@ -25,12 +25,6 @@ class CourtProvider extends BaseProvider<Court> {
     ));
     final streamed = await http.send(request);
     final response = await Response.fromStream(streamed);
-    if (response.statusCode >= 300) {
-      String message = 'HTTP ${response.statusCode}';
-      try {
-        if (response.body.isNotEmpty) message = response.body;
-      } catch (_) {}
-      throw Exception(message);
-    }
+    isValidResponse(response);
   }
 }

@@ -8,10 +8,12 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../l10n/translations.dart';
 import '../../models/sport_center.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/report_provider.dart';
 import '../../providers/sport_center_provider.dart';
 import '../../utils/app_locale.dart';
 import '../../utils/util.dart';
+import '../../providers/api_error.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -39,7 +41,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     try {
       final result = await context
           .read<SportCenterProvider>()
-          .get(filter: {'page': 1, 'pageSize': 100});
+          .get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (mounted) setState(() => _sportCenters = result.result);
     } catch (_) {
       // Sport center filter is optional; ignore load failures here.
@@ -80,6 +82,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() => _busyReport = occupancy ? 'occupancy' : 'reservations');
     final reportProvider = context.read<ReportProvider>();
     final language = context.read<LocaleProvider>().language == AppLanguage.en ? 'en' : 'bs';
+    final prefix = trMessage(context, occupancy ? 'popunjenost' : 'rezervacije');
     try {
       final bytes = occupancy
           ? await reportProvider.getOccupancyReport(
@@ -94,7 +97,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
               sportCenterId: _sportCenterId,
               language: language,
             );
-      final prefix = occupancy ? 'popunjenost' : 'rezervacije';
       final suggestedName =
           '${prefix}_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.pdf';
       final location = await getSaveLocation(
@@ -119,7 +121,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _busyReport = null);
     }
@@ -193,6 +195,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   onChanged: (v) => setState(() => _sportCenterId = v),
                 ),
               ),
+              // Clears the period and the sport centre filter, returning to a report over all time.
+              if (_dateFrom != null || _dateTo != null || _sportCenterId != null)
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _dateFrom = null;
+                    _dateTo = null;
+                    _sportCenterId = null;
+                  }),
+                  icon: const Icon(Icons.clear, size: 16),
+                  label: Text(tr(context, 'Očisti filtere')),
+                ),
             ],
           ),
           const SizedBox(height: 24),

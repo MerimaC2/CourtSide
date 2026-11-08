@@ -7,6 +7,7 @@ import '../../utils/app_locale.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
 import '../home/admin_home_screen.dart';
+import '../../providers/api_error.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -45,11 +46,13 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       if (!mounted) return;
+      // A message left over from the previous session must not follow the user in.
+      ScaffoldMessenger.of(context).clearSnackBars();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const AdminHomeScreen()),
       );
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -111,7 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 textInputAction: TextInputAction.next,
                                 validator: (v) => (v == null || v.trim().isEmpty)
-                                    ? tr(context, 'Unesite korisničko ime')
+                                    ? trMessage(context, 'Unesite korisničko ime')
                                     : null,
                               ),
                               const SizedBox(height: 16),
@@ -131,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 textInputAction: TextInputAction.done,
                                 onFieldSubmitted: (_) => _login(),
                                 validator: (v) =>
-                                    (v == null || v.isEmpty) ? tr(context, 'Unesite lozinku') : null,
+                                    (v == null || v.isEmpty) ? trMessage(context, 'Unesite lozinku') : null,
                               ),
                               const SizedBox(height: 24),
                               SizedBox(

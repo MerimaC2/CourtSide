@@ -4,10 +4,13 @@ import 'package:provider/provider.dart';
 import '../../l10n/translations.dart';
 import '../../models/city.dart';
 import '../../models/sport_center.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/city_provider.dart';
 import '../../providers/sport_center_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/pager.dart';
 import 'sport_center_form_dialog.dart';
+import '../../providers/api_error.dart';
 
 class SportCentersTab extends StatefulWidget {
   /// Whether this is the visible tab; the list and the city dropdown behind the
@@ -26,6 +29,12 @@ class _SportCentersTabState extends State<SportCentersTab> {
   List<City> _cities = [];
   bool _loading = true;
   String? _error;
+  int _page = 1;
+  int _totalCount = 0;
+
+  /// Identifies the newest load. Two loads can overlap (a pager click while a search is
+  /// still running); only the newest answer is applied, so the rows always match the pager.
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -36,7 +45,23 @@ class _SportCentersTabState extends State<SportCentersTab> {
   @override
   void didUpdateWidget(covariant SportCentersTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _load();
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadCities();
+      _load();
+    }
+  }
+
+  /// The cities behind the form's dropdown. They are not paged and change rarely, so they are
+  /// fetched when the tab opens rather than on every page turn.
+  Future<void> _loadCities() async {
+    try {
+      final cities = await context
+          .read<CityProvider>()
+          .get(filter: {'page': 1, 'pageSize': BaseProvider.maxPageSize});
+      if (mounted) setState(() => _cities = cities.result);
+    } catch (_) {
+      // Leaves the dropdown empty, which already disables the "add" button with a tooltip.
+    }
   }
 
   @override
@@ -45,34 +70,46 @@ class _SportCentersTabState extends State<SportCentersTab> {
     super.dispose();
   }
 
+  /// A new search is a different result set, so paging starts over.
+  Future<void> _resetAndLoad() {
+    _page = 1;
+    return _load();
+  }
+
   Future<void> _load() async {
+    final token = ++_loadToken;
+    // A retry after the API was unreachable must bring the dropdown data back as well.
+    if (_cities.isEmpty) _loadCities();
     setState(() {
       _loading = true;
       _error = null;
     });
-    final cityProvider = context.read<CityProvider>();
     final sportCenterProvider = context.read<SportCenterProvider>();
     try {
-      final cities = await cityProvider.get(filter: {'page': 1, 'pageSize': 200});
       final filter = <String, dynamic>{
-        'page': 1,
-        'pageSize': 200,
+        'page': _page,
+        'pageSize': Pager.pageSize,
         if (_searchController.text.trim().isNotEmpty)
           'searchTerm': _searchController.text.trim(),
       };
       final sportCenters = await sportCenterProvider.get(filter: filter);
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
+      if (sportCenters.result.isEmpty && _page > 1) {
+        // The last record on this page was deleted; fall back to the first page.
+        _page = 1;
+        return await _load();
+      }
       setState(() {
-        _cities = cities.result;
         _sportCenters = sportCenters.result;
+        _totalCount = sportCenters.count;
       });
     } catch (e) {
-      if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted && token == _loadToken) {
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && token == _loadToken) setState(() => _loading = false);
     }
   }
 
@@ -92,9 +129,11 @@ class _SportCentersTabState extends State<SportCentersTab> {
         await provider.updateAsync(sportCenter.id, result.toBody());
         if (mounted) showSuccess(context, 'Sportski centar je ažuriran.');
       }
-      _load();
+      // Lists are newest first, so after adding a record the list returns to the first page,
+      // where the new record appears; an edit reloads the current page.
+      sportCenter == null ? _resetAndLoad() : _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -121,7 +160,7 @@ class _SportCentersTabState extends State<SportCentersTab> {
       if (mounted) showSuccess(context, 'Sportski centar je obrisan.');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -140,9 +179,10 @@ class _SportCentersTabState extends State<SportCentersTab> {
                   decoration: InputDecoration(
                     hintText: tr(context, 'Pretraga sportskih centara...'),
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _load),
+                    suffixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_forward), onPressed: _resetAndLoad),
                   ),
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _resetAndLoad(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -158,6 +198,15 @@ class _SportCentersTabState extends State<SportCentersTab> {
           ),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
+          if (_error == null && _totalCount > 0)
+            Pager(
+              page: _page,
+              totalCount: _totalCount,
+              onPageChanged: (page) {
+                setState(() => _page = page);
+                _load();
+              },
+            ),
         ],
       ),
     );

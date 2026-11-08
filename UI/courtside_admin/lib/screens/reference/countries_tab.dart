@@ -5,7 +5,9 @@ import '../../l10n/translations.dart';
 import '../../models/country.dart';
 import '../../providers/country_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/pager.dart';
 import 'country_form_dialog.dart';
+import '../../providers/api_error.dart';
 
 class CountriesTab extends StatefulWidget {
   /// Whether this is the visible tab; the list reloads when it becomes visible.
@@ -22,6 +24,12 @@ class _CountriesTabState extends State<CountriesTab> {
   List<Country> _countries = [];
   bool _loading = true;
   String? _error;
+  int _page = 1;
+  int _totalCount = 0;
+
+  /// Identifies the newest load. Two loads can overlap (a pager click while a search is
+  /// still running); only the newest answer is applied, so the rows always match the pager.
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -41,28 +49,43 @@ class _CountriesTabState extends State<CountriesTab> {
     super.dispose();
   }
 
+  /// A new search is a different result set, so paging starts over.
+  Future<void> _resetAndLoad() {
+    _page = 1;
+    return _load();
+  }
+
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final filter = <String, dynamic>{
-        'page': 1,
-        'pageSize': 200,
+        'page': _page,
+        'pageSize': Pager.pageSize,
         if (_searchController.text.trim().isNotEmpty)
           'searchTerm': _searchController.text.trim(),
       };
       final result = await context.read<CountryProvider>().get(filter: filter);
-      if (!mounted) return;
-      setState(() => _countries = result.result);
+      if (!mounted || token != _loadToken) return;
+      if (result.result.isEmpty && _page > 1) {
+        // The last record on this page was deleted; fall back to the first page.
+        _page = 1;
+        return await _load();
+      }
+      setState(() {
+        _countries = result.result;
+        _totalCount = result.count;
+      });
     } catch (e) {
-      if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted && token == _loadToken) {
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && token == _loadToken) setState(() => _loading = false);
     }
   }
 
@@ -82,9 +105,11 @@ class _CountriesTabState extends State<CountriesTab> {
         await provider.updateAsync(country.id, result.toBody());
         if (mounted) showSuccess(context, 'Država je ažurirana.');
       }
-      _load();
+      // Lists are newest first, so after adding a record the list returns to the first page,
+      // where the new record appears; an edit reloads the current page.
+      country == null ? _resetAndLoad() : _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -111,7 +136,7 @@ class _CountriesTabState extends State<CountriesTab> {
       if (mounted) showSuccess(context, 'Država je obrisana.');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -130,9 +155,10 @@ class _CountriesTabState extends State<CountriesTab> {
                   decoration: InputDecoration(
                     hintText: tr(context, 'Pretraga država...'),
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _load),
+                    suffixIcon:
+                        IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _resetAndLoad),
                   ),
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _resetAndLoad(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -145,6 +171,15 @@ class _CountriesTabState extends State<CountriesTab> {
           ),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
+          if (_error == null && _totalCount > 0)
+            Pager(
+              page: _page,
+              totalCount: _totalCount,
+              onPageChanged: (page) {
+                setState(() => _page = page);
+                _load();
+              },
+            ),
         ],
       ),
     );

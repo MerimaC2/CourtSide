@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import '../../l10n/translations.dart';
 import '../../models/court.dart';
 import '../../models/court_review.dart';
+import '../../providers/base_provider.dart';
 import '../../providers/court_review_provider.dart';
 import '../../widgets/dialog_header.dart';
+import '../../providers/api_error.dart';
 
 /// Read-only list of client reviews for one court, with the average at the top.
 /// Reviews are written from the mobile app; the admin only monitors them here.
@@ -34,7 +36,7 @@ class _CourtReviewsDialogState extends State<CourtReviewsDialog> {
     try {
       final result = await context
           .read<CourtReviewProvider>()
-          .get(filter: {'courtId': widget.court.id, 'page': 1, 'pageSize': 100});
+          .get(filter: {'courtId': widget.court.id, 'page': 1, 'pageSize': BaseProvider.maxPageSize});
       if (!mounted) return;
       setState(() {
         _reviews = result.result;
@@ -43,7 +45,7 @@ class _CourtReviewsDialogState extends State<CourtReviewsDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error = describeError(e);
         _loading = false;
       });
     }
@@ -74,7 +76,7 @@ class _CourtReviewsDialogState extends State<CourtReviewsDialog> {
   Widget _buildBody(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+      return Center(child: Text(tr(context, _error!), style: const TextStyle(color: Colors.red)));
     }
     if (_reviews.isEmpty) {
       return Center(child: Text(tr(context, 'Još nema recenzija za ovaj teren.')));

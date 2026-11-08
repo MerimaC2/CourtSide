@@ -7,7 +7,9 @@ import '../../providers/base_provider.dart';
 import '../../providers/news_provider.dart';
 import '../../utils/authorization.dart';
 import '../../utils/util.dart';
+import '../../widgets/pager.dart';
 import 'news_form_dialog.dart';
+import '../../providers/api_error.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -21,6 +23,12 @@ class _NewsScreenState extends State<NewsScreen> {
   List<News> _items = [];
   bool _loading = true;
   String? _error;
+  int _page = 1;
+  int _totalCount = 0;
+
+  /// Identifies the newest load. Two loads can overlap (a pager click while a search is
+  /// still running); only the newest answer is applied, so the rows always match the pager.
+  int _loadToken = 0;
 
   @override
   void initState() {
@@ -34,28 +42,43 @@ class _NewsScreenState extends State<NewsScreen> {
     super.dispose();
   }
 
+  /// A new search is a different result set, so paging starts over.
+  Future<void> _resetAndLoad() {
+    _page = 1;
+    return _load();
+  }
+
   Future<void> _load() async {
+    final token = ++_loadToken;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       final filter = <String, dynamic>{
-        'page': 1,
-        'pageSize': 200,
+        'page': _page,
+        'pageSize': Pager.pageSize,
         if (_searchController.text.trim().isNotEmpty)
           'searchTerm': _searchController.text.trim(),
       };
       final result = await context.read<NewsProvider>().get(filter: filter);
-      if (!mounted) return;
-      setState(() => _items = result.result);
+      if (!mounted || token != _loadToken) return;
+      if (result.result.isEmpty && _page > 1) {
+        // The last record on this page was deleted; fall back to the first page.
+        _page = 1;
+        return await _load();
+      }
+      setState(() {
+        _items = result.result;
+        _totalCount = result.count;
+      });
     } catch (e) {
-      if (mounted) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted && token == _loadToken) {
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && token == _loadToken) setState(() => _loading = false);
     }
   }
 
@@ -87,9 +110,11 @@ class _NewsScreenState extends State<NewsScreen> {
       if (mounted) {
         showSuccess(context, news == null ? 'Obavijest je dodana.' : 'Obavijest je ažurirana.');
       }
-      _load();
+      // Lists are newest first, so after adding a record the list returns to the first page,
+      // where the new record appears; an edit reloads the current page.
+      news == null ? _resetAndLoad() : _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -116,7 +141,7 @@ class _NewsScreenState extends State<NewsScreen> {
       if (mounted) showSuccess(context, 'Obavijest je obrisana.');
       _load();
     } catch (e) {
-      if (mounted) showError(context, e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) showError(context, describeError(e));
     }
   }
 
@@ -135,9 +160,10 @@ class _NewsScreenState extends State<NewsScreen> {
                   decoration: InputDecoration(
                     hintText: tr(context, 'Pretraga obavijesti...'),
                     prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _load),
+                    suffixIcon: IconButton(
+                        icon: const Icon(Icons.arrow_forward), onPressed: _resetAndLoad),
                   ),
-                  onSubmitted: (_) => _load(),
+                  onSubmitted: (_) => _resetAndLoad(),
                 ),
               ),
               const SizedBox(width: 12),
@@ -150,6 +176,15 @@ class _NewsScreenState extends State<NewsScreen> {
           ),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
+          if (_error == null && _totalCount > 0)
+            Pager(
+              page: _page,
+              totalCount: _totalCount,
+              onPageChanged: (page) {
+                setState(() => _page = page);
+                _load();
+              },
+            ),
         ],
       ),
     );

@@ -7,7 +7,9 @@ import '../../l10n/translations.dart';
 import '../../models/reservation.dart';
 import '../../providers/reservation_provider.dart';
 import '../../utils/util.dart';
+import '../../widgets/pager.dart';
 import 'reservation_detail_dialog.dart';
+import '../../providers/api_error.dart';
 
 const _statuses = ['Pending', 'Confirmed', 'Cancelled', 'Completed'];
 
@@ -39,10 +41,13 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   String? _error;
   Timer? _pollTimer;
   bool _fetching = false;
+
+  /// Identifies the newest request, so a slower earlier one cannot overwrite it.
+  int _fetchToken = 0;
   int _page = 1;
   int _totalCount = 0;
 
-  static const _pageSize = 10;
+  static const _pageSize = Pager.pageSize;
 
   @override
   void initState() {
@@ -85,7 +90,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   /// Filter changes restart from the first page — the old page number is
   /// meaningless against a different result set.
   Future<void> _resetAndLoad() {
-    _page = 1;
+    setState(() => _page = 1);
     return _fetch();
   }
 
@@ -93,7 +98,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   /// the loading spinner, and keeps whatever is already on screen if the request
   /// fails — a dropped poll shouldn't replace the table with an error.
   Future<void> _fetch({bool silent = false}) async {
-    if (!mounted || _fetching) return;
+    if (!mounted) return;
+    // The background poll steps aside for whatever is already running, but a page turn or a
+    // filter change must never be dropped — it is the only thing the user asked for.
+    if (silent && _fetching) return;
+
+    final token = ++_fetchToken;
     _fetching = true;
     if (!silent) {
       setState(() {
@@ -113,35 +123,49 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         if (_dateTo != null) 'dateTo': formatApiDate(_dateTo!),
       };
       final result = await reservationProvider.get(filter: filter);
-      if (!mounted) return;
+      if (!mounted || token != _fetchToken) return;
       if (result.result.isEmpty && _page > 1) {
-        // The requested page no longer exists under the current filter.
-        _page = 1;
+        // The requested page no longer exists under the current filter. The retry is a fresh
+        // request in its own right, so the in-flight flag is released first — otherwise a
+        // background poll's retry would see itself as "already running" and do nothing.
+        setState(() => _page = 1);
         _fetching = false;
-        return _fetch(silent: silent);
+        return await _fetch(silent: silent);
       }
       setState(() {
         _reservations = result.result;
         _totalCount = result.count;
       });
     } catch (e) {
-      if (mounted && !silent) {
-        final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted && !silent && token == _fetchToken) {
+        final message = describeError(e);
         setState(() => _error = trMessage(context, message));
       }
     } finally {
-      _fetching = false;
-      if (mounted && !silent) setState(() => _loading = false);
+      // A newer request has already taken over the flags; leave them to it.
+      if (token == _fetchToken) {
+        _fetching = false;
+        if (mounted && !silent) setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _pickDate({required bool from}) async {
     final now = DateTime.now();
+    // The two ends bound each other, so the pickers cannot produce a period that runs
+    // backwards (the API refuses one).
+    final earliest = from ? DateTime(now.year - 2) : (_dateFrom ?? DateTime(now.year - 2));
+    final latest = from ? (_dateTo ?? DateTime(now.year + 1)) : DateTime(now.year + 1);
+    final current = (from ? _dateFrom : _dateTo) ?? now;
     final picked = await showDatePicker(
       context: context,
-      initialDate: (from ? _dateFrom : _dateTo) ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 1),
+      initialDate: current.isBefore(earliest)
+          ? earliest
+          : current.isAfter(latest)
+              ? latest
+              : current,
+      firstDate: earliest,
+      lastDate: latest,
     );
     if (picked == null) return;
     setState(() {
@@ -182,48 +206,21 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
           _buildFilters(),
           const SizedBox(height: 16),
           Expanded(child: _buildBody()),
-          if (!_loading && _error == null && _totalCount > 0) _buildPager(),
+          if (_error == null && _totalCount > 0) _buildPager(),
         ],
       ),
     );
   }
 
-  /// Page navigation under the table: total count left, page controls right.
   /// The background poll refreshes whichever page is open.
-  Widget _buildPager() {
-    final totalPages = (_totalCount + _pageSize - 1) ~/ _pageSize;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          Text('${tr(context, 'Ukupno')}: $_totalCount',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-          const Spacer(),
-          IconButton(
-            tooltip: tr(context, 'Prethodna stranica'),
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _page > 1
-                ? () {
-                    setState(() => _page--);
-                    _fetch();
-                  }
-                : null,
-          ),
-          Text('${tr(context, 'Stranica')} $_page / $totalPages'),
-          IconButton(
-            tooltip: tr(context, 'Sljedeća stranica'),
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _page < totalPages
-                ? () {
-                    setState(() => _page++);
-                    _fetch();
-                  }
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildPager() => Pager(
+        page: _page,
+        totalCount: _totalCount,
+        onPageChanged: (page) {
+          setState(() => _page = page);
+          _fetch();
+        },
+      );
 
   Widget _buildFilters() {
     return Wrap(
